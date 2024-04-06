@@ -144,7 +144,7 @@ class Net(nn.Module):
 
         Args:
             x (_type_): node features
-            timestep: 
+            timestep (_type_): time step for noising (n_batch, )
             edge_index (_type_): edge index matrix, shape = [2, num_edges]
             edge_attr (_type_): edge attributes, default None
 
