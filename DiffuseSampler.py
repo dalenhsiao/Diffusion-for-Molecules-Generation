@@ -45,13 +45,15 @@ class DiffuseSampler():
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)     
             
     @staticmethod
-    def sample_forward_diffuse_training(x_0, t, device, sampling_mode="linear"):
+    def sample_forward_diffuse_training(x_0, total_timestep, t,device, sampling_mode="linear"):
             """
             Takes a sample and a timestep as input and
             returns the noisy version of it
 
-            x0 : original molecules
-            t : timestep
+            x0 (torch Tensor) : original molecules (n_batch, n_feat)
+            total_timesteps (int): total sampled timestep 
+            t(torch Tensor) : sampled timesteps (n_timestep, )
+            
 
             """
             ########### pre-calculated terms
