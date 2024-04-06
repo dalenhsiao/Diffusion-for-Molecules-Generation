@@ -45,7 +45,7 @@ class DiffuseSampler():
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)     
             
     @staticmethod
-    def sample_forward_diffuse_training(self,x_0, t, device, sampling_mode="linear"):
+    def sample_forward_diffuse_training(x_0, t, device, sampling_mode="linear"):
             """
             Takes a sample and a timestep as input and
             returns the noisy version of it
@@ -55,7 +55,7 @@ class DiffuseSampler():
 
             """
             ########### pre-calculated terms
-            betas = self.beta_scheduler(timesteps=t, mode=sampling_mode)
+            betas = DiffuseSampler.beta_scheduler(timesteps=t, mode=sampling_mode)
             alphas = 1. - betas
             alphas_cumprod = torch.cumprod(alphas, axis=0)
             alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -65,8 +65,8 @@ class DiffuseSampler():
             posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
             ############
             noise = torch.randn_like(x_0) # sampling noise
-            sqrt_alphas_cumprod_t = self.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
-            sqrt_one_minus_alphas_cumprod_t = self.get_index_from_list(
+            sqrt_alphas_cumprod_t = DiffuseSampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
+            sqrt_one_minus_alphas_cumprod_t = DiffuseSampler.get_index_from_list(
                 sqrt_one_minus_alphas_cumprod, t, x_0.shape
             )
             # mean + variance
