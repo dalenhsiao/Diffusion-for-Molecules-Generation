@@ -49,30 +49,57 @@ import torch.nn.functional as F
         
 ## pygeometrics
 
-class Net(nn.Module):
-    def __init__(self, n_feat_in, hidden_dim, latent_dim, n_layers, activation= nn.SiLU(),device="cpu"):
-        super().__init__()
-        self.device = device
+# class GraphConv(nn.Module):
+#     def __init__(self, in_channels, out_channels, nn, aggr):
+#         super(GraphConv, self).__init__()
+#         self.gcl = NNConv(in_channels, out_channels, nn, aggr)
+#     def forward(self, x, edge_index, edge_attr):
+#         return self.gcl(x, edge_index, edge_attr)
+
+
+class Encoder(nn.Module):
+    def __init__(self, n_feat_in, hidden_dim, latent_dim, n_layers, activation= nn.SiLU()):
+        super(Encoder, self).__init__()
+        # self.device = device
         self.n_layers = n_layers
         self.act = activation
         self.embedding = nn.Linear(n_feat_in, hidden_dim) # initialize the embedding layer
         self.embedding_out = nn.Linear(hidden_dim, latent_dim) # output embedding layer (latent space)
         
-        self.nn = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim), 
+        # self.nn is for edge features
+        # in_shape = (-1, num_edge_features) -> out_shape = (-1, hidden_dim*hidden_dim)
+        self.edge_attr_nn = nn.Sequential(
+            nn.Linear(4, hidden_dim), 
             self.act,
-            nn.Linear(hidden_dim, hidden_dim)
-            ) # NN convolution block for edge conditioned convolution
+            nn.Linear(hidden_dim, hidden_dim*hidden_dim)
+            ) # NN convolution block for edge conditioned convolution 
         
         ### Encoder 
         # graph convolution layers
+        
+        NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.edge_attr_nn, aggr='add')
         for i in range(self.n_layers):
             # edge conditioned convolution (input is node features and conditioned by edge)
+            print("add gcl_%d" % i)
+            self.conv = NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.edge_attr_nn, aggr='add')
             self.add_module("gcl_%d" % i, 
-                NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.nn, aggr='add')
+                NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.edge_attr_nn, aggr='add')
                 ) # message passing layer
-        self.to(self.device)
-                1
+        # self.to(self.device)
+        
+        
+        
+        # self.convs = nn.Sequential(
+        #     NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.edge_attr_nn, aggr='add') for _ in range(self.n_layers)
+        # )
+        
+    #     self.convs = nn.ModuleList([
+    #         NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn=self.edge_attr_nn, aggr='add')
+    # for _ in range(n_layers)
+    #     ])        
+        # print(self.convs)
+        # self.conv = NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn =self.edge_attr_nn, aggr='add') # for some fucking reasons its not working
+
         # Pooling layers
         """
         Basically the parameters
@@ -81,7 +108,7 @@ class Net(nn.Module):
         - forward pass: (x:nodes embedding, edge_index: edge index, edge_attr: edge attributes)
         
         """
-        self.pooling = Set2Set(latent_dim, processing_steps=4) # aggregation 
+        # self.pooling = Set2Set(latent_dim, processing_steps=4) # aggregation 
         
         # graph convolution layer
         # self.conv = NNConv(in_channels=hidden_dim, out_channels=hidden_dim, nn:callable, aggr='mean') # message passing layer 
@@ -102,28 +129,44 @@ class Net(nn.Module):
             edge_index (_type_): edge index matrix, shape = [2, num_edges]
             edge_attr (_type_): edge attributes, default None
 
+
         Returns:
             h: graph latent representation
         """
         h = self.embedding(x)
+        print("initial h:", h.shape)
         
         # out = F.relu(self.lin0(data.x))
         # h = out.unsqueeze(0)
 
         
-        for i in range(self.n_layers): # num_layers
-            # h = F.relu(self.conv(h, edge_index, edge_attr))
+        for i in range(self.n_layers):
+            print("running gcl_%d" % i)
             h = self._modules["gcl_%d" % i](h, edge_index, edge_attr)
+            print("h in the loop:", h.shape)
             # out, h = self.gru(m.unsqueeze(0), h)
             # out = out.squeeze(0)
-        if batch is not None:
-            out = self.set2set(out, data.batch) # pooling layer
+        # h = self.conv(h, edge_index, edge_attr)
+        # for conv in self.convs: # num_layers
+        #     # h = F.relu(self.conv(h, edge_index, edge_attr))
+        #     print("start running")
+        #     # h = self._modules["gcl_%d" % i](h, edge_index, edge_attr)
+        #     h = conv(h, edge_index, edge_attr)
+        #     print("h in the loop:", h.shape)
+            # out, h = self.gru(m.unsqueeze(0), h)
+            # out = out.squeeze(0)
+        # if batch is not None:
+        #     out = self.set2set(out, data.batch) # pooling layer
         
         out = F.relu(self.embedding_out(h))
         
         # out = F.relu(self.lin1(out))
         # out = self.lin2(out)/
         return out
+    
+    
+    
+    
 
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

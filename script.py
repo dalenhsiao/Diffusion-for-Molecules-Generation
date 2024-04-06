@@ -313,6 +313,7 @@ class GNN(nn.Module):
         self.device = device
         self.n_layers = n_layers
         ### Encoder
+        
         self.embedding = nn.Linear(in_node_nf, self.hidden_nf)
         self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf)
         for i in range(0, n_layers):
