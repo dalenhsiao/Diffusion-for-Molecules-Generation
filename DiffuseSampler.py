@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn 
-import torch.functional as F
+import torch.nn.functional as F
 
 class DiffuseSampler():
     def __init__(self):
         pass
          
             
-    def beta_scheduler(timesteps, start=0.0001, end=0.02, mode="linear"): # Beta for forward pass sampling
+    def beta_scheduler(self,timesteps, start=0.0001, end=0.02, mode="linear"): # Beta for forward pass sampling
         """
 
         Args:
@@ -55,7 +55,8 @@ class DiffuseSampler():
 
             """
             ########### pre-calculated terms
-            betas = DiffuseSampler.beta_scheduler(timesteps=t, mode=sampling_mode)
+            sampler = DiffuseSampler()
+            betas = sampler.beta_scheduler(timesteps=t, mode=sampling_mode)
             alphas = 1. - betas
             alphas_cumprod = torch.cumprod(alphas, axis=0)
             alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -65,8 +66,8 @@ class DiffuseSampler():
             posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
             ############
             noise = torch.randn_like(x_0) # sampling noise
-            sqrt_alphas_cumprod_t = DiffuseSampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
-            sqrt_one_minus_alphas_cumprod_t = DiffuseSampler.get_index_from_list(
+            sqrt_alphas_cumprod_t = sampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
+            sqrt_one_minus_alphas_cumprod_t = sampler.get_index_from_list(
                 sqrt_one_minus_alphas_cumprod, t, x_0.shape
             )
             # mean + variance
