@@ -58,7 +58,7 @@ class DiffuseSampler():
             """
             ########### pre-calculated terms
             sampler = DiffuseSampler()
-            betas = sampler.beta_scheduler(timesteps=t, mode=sampling_mode)
+            betas = sampler.beta_scheduler(timesteps=total_timestep, mode=sampling_mode)
             alphas = 1. - betas
             alphas_cumprod = torch.cumprod(alphas, axis=0)
             alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
