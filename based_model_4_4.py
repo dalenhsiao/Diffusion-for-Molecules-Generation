@@ -144,6 +144,7 @@ class Net(nn.Module):
 
         Args:
             x (_type_): node features
+            timestep: 
             edge_index (_type_): edge index matrix, shape = [2, num_edges]
             edge_attr (_type_): edge attributes, default None
 
