@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import math
 from torch_geometric.nn import NNConv, GATConv, GCNConv
+from DiffuseSampler import DiffuseSampler
+import torch.nn.functional as F
 
 # Graph Convolution Layer
 class GraphConv(nn.Module):
@@ -180,14 +182,31 @@ class Net(nn.Module):
         return out
     
     
-    # get edge attributes NN 
-    def getEdgeAttrNN(self, edge_in_dim, edge_out_dim):
+    # get loss for diffusion process
+    def get_loss(self, x_0, t, edge_index,total_timestep, device, mode="linear",edge_attr=None):
+        """_summary_
+
+        Args:
+            x_0 (Tensor): ground truth data
+            edge_index (Tensor): edge index -> shape = (2, edge)
+            total_timestep (int): Total timesteps
+            t (Tensor): timesteps sample -> (n_batch, )
+            device : device
+            mode (String): "linear", "cosine" schedule for noise scheduling 
+            edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
+
+        Returns:
+            _type_: _description_
+        """
+        # generate sample 
         
-        return nn.Sequential(
-                nn.Linear(edge_in_dim, edge_out_dim), 
-                self.act,
-                nn.Linear(edge_out_dim, edge_out_dim*edge_out_dim)
-        )
+        x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
+        pred_noise = self.forward(x_noised, t, edge_index, edge_attr)
+        metric = nn.MSELoss()
+        loss = metric(pred_noise, noise)
+        return loss
+        
+        
         
         
 

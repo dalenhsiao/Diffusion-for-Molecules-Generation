@@ -52,7 +52,7 @@ class DiffuseSampler():
 
             x0 (torch Tensor) : original molecules (n_batch, n_feat)
             total_timesteps (int): total sampled timestep 
-            t(torch Tensor) : sampled timesteps (n_timestep, )
+            t(torch Tensor, dtype = torch.int64) : sampled timesteps (n_timestep, )
             
 
             """
