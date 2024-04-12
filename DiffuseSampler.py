@@ -1,10 +1,63 @@
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
+from tqdm import tqdm
+from utils import * 
 
-class DiffuseSampler():
-    def __init__(self):
-        pass
+class DiffusionModel(nn.Module):
+    def __init__(
+        self, 
+        model, 
+        timesteps = 1000, 
+        sampling_timesteps = None, 
+        noise_schedule="cosine"
+        ):
+        super(DiffusionModel, self).__init__()
+        self.model = model 
+        self.device = torch.cuda.current_device()
+        self.timestep = timesteps
+        ########### pre-calculated terms
+        # sampler = DiffusionModel()
+        self.betas = self.sampler.beta_scheduler(timesteps=timesteps, mode=noise_schedule).to(self.device)
+        self.alphas = 1. - self.betas
+        self.alphas_cumprod = torch.cumprod(self.alphas, axis=0).to(self.device)
+        self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0).to(self.device)
+        
+        ###############################
+        # Precompute values needed for the diffusion forward processs
+        ###############################
+        # This is the coefficient of x_t when predicting x_0
+        self.x_0_pred_coef_1 = 1 / torch.sqrt(self.alphas_cumprod)
+        # This is the coefficient of pred_noise when predicting x_0
+        self.x_0_pred_coef_2 = torch.sqrt(1 - self.alphas_cumprod)
+        
+        ##################################################################
+        # Compute the coefficients for the mean.
+        ##################################################################
+        # This is coefficient of x_0 in the DDPM section
+        self.posterior_mean_coef1 = torch.sqrt(self.alphas_cumprod_prev) * self.betas / (1 - self.alphas_cumprod)
+        # This is coefficient of x_t in the DDPM section
+        self.posterior_mean_coef2 = torch.sqrt(self.alphas) * (1 - self.alphas_cumprod_prev) / (1 - self.alphas_cumprod)
+
+        ##################################################################
+        # Compute posterior variance.
+        ##################################################################
+        # Calculations for posterior q(x_{t-1} | x_t, x_0) in DDPM
+        self.posterior_variance = (1 - self.alphas_cumprod_prev) * self.betas / (1 - self.alphas_cumprod)
+
+        self.posterior_log_variance_clipped = torch.log(
+            self.posterior_variance.clamp(min =1e-20))
+
+        # sampling related parameters
+        self.sampling_timesteps = default(sampling_timesteps, timesteps) # default num sampling timesteps to number of timesteps at training
+
+        assert self.sampling_timesteps <= timesteps
+        self.is_ddim_sampling = self.sampling_timesteps < timesteps
+        # self.ddim_sampling_eta = ddim_sampling_eta
+        
+        
+        ############
+        
          
             
     def beta_scheduler(self,timesteps, start=0.0001, end=0.02, mode="linear"): # Beta for forward pass sampling
@@ -17,24 +70,38 @@ class DiffuseSampler():
             mode (str, optional): linear or cosine scheduler. Defaults to "linear".
 
         Returns:
-            _type_: _description_
+            beta: beta schedule
         """
         mode = mode.lower()
         steps = torch.linspace(start, end, timesteps)
         if mode == "linear":
-            return steps # linear schedule 
+            beta = steps
+            return beta # linear schedule 
         elif mode == "cosine": 
             # Calculate the cosine values, scaled to fit the range between start and end
             values = (torch.cos(steps) + 1) / 2  # Rescale cosine to go from 0 to 1
-            schedule = values * (end - start) + start  # Scale and shift to fit [start, end]
+            beta = values * (end - start) + start  # Scale and shift to fit [start, end]
             
-            return schedule
+            return beta
         else:
             raise ValueError("Available modes are \"linear\" & \"cosine\" scheduler")
     
 
 
-     
+    def get_posterior_parameters(self,x_0,x_t,t):
+        # Compute the posterior mean and variance for x_{t-1}
+        # using the coefficients, x_t, and x_0.
+        posterior_mean = (
+            extract(self.posterior_mean_coef1, t, x_t.shape) * x_0 +
+            extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
+        )
+        posterior_variance = extract(self.posterior_variance, t, x_t.shape)
+        posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
+        return posterior_mean, posterior_variance, posterior_log_variance_clipped
+
+         
+    
+    
     def get_index_from_list(self, vals, t, x_shape): # helper function for getting index
         """
         Returns a specific index t of a passed list of values vals
@@ -44,8 +111,7 @@ class DiffuseSampler():
         out = vals.gather(-1, t.cpu())
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)     
             
-    @staticmethod
-    def sample_forward_diffuse_training(x_0, total_timestep, t,device, sampling_mode="linear"):
+    def sample_forward_diffuse_training(self,x_0, total_timestep, t,device, sampling_mode="linear"):
             """
             Takes a sample and a timestep as input and
             returns the noisy version of it
@@ -56,22 +122,70 @@ class DiffuseSampler():
             
 
             """
-            ########### pre-calculated terms
-            sampler = DiffuseSampler()
-            betas = sampler.beta_scheduler(timesteps=total_timestep, mode=sampling_mode)
-            alphas = 1. - betas
-            alphas_cumprod = torch.cumprod(alphas, axis=0)
-            alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
-            sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
-            sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
-            sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
-            posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
-            ############
+            sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
+            sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
+            sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - self.alphas_cumprod)
+            posterior_variance = self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)
             noise = torch.randn_like(x_0) # sampling noise
-            sqrt_alphas_cumprod_t = sampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
-            sqrt_one_minus_alphas_cumprod_t = sampler.get_index_from_list(
+            sqrt_alphas_cumprod_t = self.sampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
+            sqrt_one_minus_alphas_cumprod_t = self.sampler.get_index_from_list(
                 sqrt_one_minus_alphas_cumprod, t, x_0.shape
             )
             # mean + variance
             return sqrt_alphas_cumprod_t.to(device) * x_0.to(device) \
             + sqrt_one_minus_alphas_cumprod_t.to(device) * noise.to(device), noise.to(device) # noisy version of the image
+            
+    def model_prediction(self, x_t, t, edge_index):
+        ##################################################################
+        # Given a noised data x_t, predict x_0 and the additive
+        # noise to predict the additive noise, use the denoising model.
+        ##################################################################
+        """
+
+        Args:
+            x_t (_type_): _description_
+            t (_type_):(n_batch, )
+        """
+        
+        pred_noise = self.model(x_t, t, edge_index) # why the t is integer but in computing the time encodeing they are tensor???       
+        coef1 = extract(self.x_0_pred_coef_1, t, x_t.shape)
+        coef2 = extract(self.x_0_pred_coef_2, t, x_t.shape)
+        x_0 = coef1 * (x_t - coef2 * pred_noise)
+        ##########
+        # x_0 = torch.clamp(x_0, -1, 1) # maybe we need clamp but will have to figure out how to clamp 
+        
+        return (pred_noise, x_0)
+        
+    
+    @torch.no_grad()
+    def pred_denoise_at_prev_step(self, x,t):
+        #### why t is integer.... turns out t is not an integer wtf
+        pred_noise, x_0 = self.model_prediction(x,t)
+        posterior_mean, posterior_variance, posterior_log_variance_clipped = self.get_posterior_parameters(x_0, x, t)
+        pred_molecule = posterior_mean + torch.sqrt(posterior_variance) * torch.randn_like(x) 
+        return pred_molecule, x_0
+        
+    
+    @torch.no_grad()
+    def sampling_ddpm(self,shape, z):
+        """
+        diffusion sampling 
+        
+        """
+        molecule = z
+        for t in tqdm(range(self.total_timestep-1,0,-1)):
+            batched_times = torch.full((shape[0],), t, device=self.device, dtype=torch.long)
+            molecule, _ = self.predict_denoised_at_prev_timestep(molecule, batched_times)
+        # img = unnormalize_to_zero_to_one(img) # maybe we have to do a certain level of scaling
+        return molecule
+    
+    @torch.no_grad()
+    def sample(self,x_shape:tuple):
+        z = torch.randn(x_shape, device=self.betas.device)
+        return self.sampling_ddpm(x_shape, z)
+    @torch.no_grad()
+    def sample_given_z(self, z, x_shape):
+        # sample_fn = self.sample_ddpm if not self.is_ddim_sampling else self.sample_ddim
+        z = z.reshape(x_shape)
+        return self.sampling_ddpm(x_shape, z)
+        

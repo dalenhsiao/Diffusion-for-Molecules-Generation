@@ -4,6 +4,7 @@ import math
 from torch_geometric.nn import NNConv, GATConv, GCNConv
 from DiffuseSampler import DiffuseSampler
 import torch.nn.functional as F
+from tqdm import tqdm 
 
 # Graph Convolution Layer
 class GraphConv(nn.Module):
@@ -101,12 +102,24 @@ class Net(nn.Module):
         # self.n_layers = n_layers
         self.layers = layers
         self.act = activation
-        self.embedding = nn.Linear(n_feat_in, self.layers[0]) # initialize the embedding layer
-        self.embedding_out = nn.Linear(self.layers[0], n_feat_in) # output embedding layer (latent space)
+        self.layer0 = nn.Linear(n_feat_in, self.layers[0]) # initialize the embedding layer
+        self.layer_out = nn.Linear(self.layers[0], n_feat_in) # output embedding layer (latent space)
         self.edge_attr_dim = edge_attr_dim
         # hidden_ = (64, 128, 256)
         
-        # Time embedding
+        # time embeddings
+
+        # time_dim = dim * 4
+
+        # sinu_pos_emb = SinusoidalPosEmb(dim)
+        # fourier_dim = dim
+
+        # self.time_mlp = nn.Sequential(
+        #     sinu_pos_emb,
+        #     nn.Linear(fourier_dim, time_dim),
+        #     nn.GELU(),
+        #     nn.Linear(time_dim, time_dim)
+        # )
         self.time_mlp = nn.Sequential(
                 SinusoidalPositionEmbeddings(time_emb_dim),
                 nn.Linear(time_emb_dim, time_emb_dim),
@@ -154,7 +167,8 @@ class Net(nn.Module):
         Returns:
             h: graph latent representation
         """
-        h = self.embedding(x) # initialize node embedding
+        h = self.layer0(x) # initialize node embedding
+        # batched_times = torch.full((img.shape[0],), t, device=self.device, dtype=torch.long)
         t = self.time_mlp(timestep)
         # print("initial h:", h.shape)
         
@@ -177,9 +191,12 @@ class Net(nn.Module):
             h = up(h, edge_index, t, edge_attr)
             
         
-        out = self.embedding_out(h)
+        out_noise = self.layer_out(h) # directly output the one-hot vector of probaility function
+        # x0 prediction from the model 
+        # x_0_pred = 
+        
+        return out_noise
     
-        return out
     
     
     # get loss for diffusion process
@@ -199,12 +216,14 @@ class Net(nn.Module):
             _type_: _description_
         """
         # generate sample 
-        
-        x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
+        self.total_timestep = total_timestep
+        x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, self.total_timestep, t, device,mode) # noised, noise added
         pred_noise = self.forward(x_noised, t, edge_index, edge_attr)
         metric = nn.MSELoss()
         loss = metric(pred_noise, noise)
         return loss
+
+    
         
         
         
