@@ -191,40 +191,37 @@ class Net(nn.Module):
             h = up(h, edge_index, t, edge_attr)
             
         
-        out_noise = self.layer_out(h) # directly output the one-hot vector of probaility function
-        # x0 prediction from the model 
-        # x_0_pred = 
+        out = self.embedding_out(h)
+    
+        return out
+    
+    
+    # # get loss for diffusion process
+    # def get_loss(self, x_0, t, edge_index,total_timestep, device, mode="linear",edge_attr=None):
+    #     """_summary_
+
+    #     Args:
+    #         x_0 (Tensor): ground truth data
+    #         edge_index (Tensor): edge index -> shape = (2, edge)
+    #         total_timestep (int): Total timesteps
+    #         t (Tensor): timesteps sample -> (n_batch, )
+    #         device : device
+    #         mode (String): "linear", "cosine" schedule for noise scheduling 
+    #         edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
+
+    #     Returns:
+    #         _type_: _description_
+    #     """
+    #     # generate sample 
         
-        return out_noise
+    #     x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
+    #     pred_noise = self.forward(x_noised, t, edge_index, edge_attr)
+    #     metric = nn.MSELoss()
+    #     loss = metric(pred_noise, noise)
+    #     return loss
     
     
-    
-    # get loss for diffusion process
-    def get_loss(self, x_0, t, edge_index,total_timestep, device, mode="linear",edge_attr=None):
-        """_summary_
 
-        Args:
-            x_0 (Tensor): ground truth data
-            edge_index (Tensor): edge index -> shape = (2, edge)
-            total_timestep (int): Total timesteps
-            t (Tensor): timesteps sample -> (n_batch, )
-            device : device
-            mode (String): "linear", "cosine" schedule for noise scheduling 
-            edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
-
-        Returns:
-            _type_: _description_
-        """
-        # generate sample 
-        self.total_timestep = total_timestep
-        x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, self.total_timestep, t, device,mode) # noised, noise added
-        pred_noise = self.forward(x_noised, t, edge_index, edge_attr)
-        metric = nn.MSELoss()
-        loss = metric(pred_noise, noise)
-        return loss
-
-    
-        
         
         
         
