@@ -153,8 +153,7 @@ class Net(nn.Module):
         
         """
 
-
-    def forward(self, x, timestep,edge_index, edge_attr=None):
+    def forward(self, x, timestep, edge_index, edge_attr=None):
         """_summary_
 
         Args:
