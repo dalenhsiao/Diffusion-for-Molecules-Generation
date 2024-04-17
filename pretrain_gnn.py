@@ -12,10 +12,11 @@ import numpy as np
 
 # configs
 wandb.init(
-        project="gnn-pretrain",
+        project="gnn-pretrain-batchsize-64",
         config={
-            "epochs": 10,
-            "batch_size": 1,
+            "epochs": 100,
+            "early_stopping":5,
+            "batch_size": 64,
             "layers": [32, 64, 128],
             "lr": 1e-3
             })
@@ -30,16 +31,25 @@ device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 print(device)
 # model
 net = Net(
-    n_feat_in=dummy.x.shape[1],
+    n_feat_in=5,
     layers=config.layers,
     time_emb_dim=4
     ).to(device)
 
+
+# class imbalance weights
+weights = torch.tensor([0.6507343348068023,
+            0.9452815257785657,
+            5.935209084917005,
+            4.291072126883656,
+            259.02613087395696]
+)
 optimizer = torch.optim.Adam(net.parameters(), lr=config.lr)
 criterion = nn.CrossEntropyLoss()
 n_steps_per_epoch = math.ceil(len(dataloader) / config.batch_size)
 
-best_loss = np.inf()
+best_loss = np.inf
+
 
 for epoch in range(config.epochs):
     running_loss = 0
@@ -49,8 +59,8 @@ for epoch in range(config.epochs):
             optimizer.zero_grad()
             data = data.to(device)
             x = data.x[:, :5]
-            ts = torch.fill(torch.empty((data.shapa[0], )), 0)
-            out = net(x, ts, data.edge_index)
+            ts = torch.fill(torch.empty((data.x.shape[0], )), 0).to(device)
+            out = net(x, ts, data.edge_index.to(device))
             loss = criterion(out, x)
             running_loss += loss.item() / len(dataloader)
             loss.backward()
@@ -63,13 +73,18 @@ for epoch in range(config.epochs):
                 # Log train metrics to wandb
                 wandb.log(metrics)
             tepoch.set_postfix(train_loss=loss.item())
-    wandb.log({**metrics, "epoch": epoch})
+    wandb.log({**metrics, "epoch": epoch, "train/epoch_train_loss": running_loss})
     if running_loss < best_loss:
-        best_loss = running_loss
+        early_stop = 0
         print(f"model converges, {best_loss} -> {running_loss}")
+        best_loss = running_loss
         print("saving best model ....")
-        model_path = "/models/model_best.pth"
+        model_path = "./models/model_best_64.pth"
         torch.save(net.state_dict(), model_path)
         wandb.save(model_path)
+    else:
+        early_stop += 1
+        if early_stop == config.early_stopping:
+            print(f"No improvement in {config.early_stopping}, finish training")
 
 wandb.finish()
