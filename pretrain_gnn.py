@@ -13,8 +13,9 @@ import numpy as np
 # configs
 wandb.init(
         project="gnn-pretrain-batchsize-64",
+        name="run-with-early-stopping=5",
         config={
-            "epochs": 100,
+            "epochs": 30,
             "early_stopping":5,
             "batch_size": 64,
             "layers": [32, 64, 128],
@@ -50,7 +51,7 @@ n_steps_per_epoch = math.ceil(len(dataloader) / config.batch_size)
 
 best_loss = np.inf
 
-
+early_stop = 0
 for epoch in range(config.epochs):
     running_loss = 0
     with tqdm(dataloader) as tepoch:
@@ -67,19 +68,17 @@ for epoch in range(config.epochs):
             optimizer.step()
             metrics = {
                     "train/train_loss": loss.item(),
-                    "train/epoch": (step + 1 + (n_steps_per_epoch * epoch)) / n_steps_per_epoch, 
+                    "global_step": epoch * len(dataloader) + step, 
                        }
-            if step + 1 < n_steps_per_epoch:
-                # Log train metrics to wandb
-                wandb.log(metrics)
+            wandb.log(metrics)
             tepoch.set_postfix(train_loss=loss.item())
-    wandb.log({**metrics, "epoch": epoch, "train/epoch_train_loss": running_loss})
+    wandb.log({"epoch": epoch, "train/epoch_train_loss": running_loss})
     if running_loss < best_loss:
         early_stop = 0
         print(f"model converges, {best_loss} -> {running_loss}")
         best_loss = running_loss
         print("saving best model ....")
-        model_path = "./models/model_best_64.pth"
+        model_path = "./models/model_best_64_es5.pth"
         torch.save(net.state_dict(), model_path)
         wandb.save(model_path)
     else:
