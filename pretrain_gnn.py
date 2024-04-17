@@ -12,8 +12,8 @@ import os.path
 
 
 """
-python run_experiment.py --experiment gnn 
---experiment_run run1 --save_model_dir "/path/to/save" --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 0.001
+python pretrain_gnn.py --experiment gnn 
+--experiment_run run1  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
 """
 
 
