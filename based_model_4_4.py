@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import math
 from torch_geometric.nn import NNConv, GATConv, GCNConv
-from DiffuseSampler import DiffuseSampler
 import torch.nn.functional as F
 from tqdm import tqdm 
 
@@ -190,7 +189,7 @@ class Net(nn.Module):
             h = up(h, edge_index, t, edge_attr)
             
         
-        out = self.embedding_out(h)
+        out = self.layer_out(h)
     
         return out
     
