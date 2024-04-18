@@ -1,8 +1,10 @@
+# loading the pretrained model into diffusion
 
 from DiffuseSampler import DiffuseSampler
 
+
 # get loss for diffusion process
-def get_loss(model, x_0, t, edge_index,total_timestep, device, mode="linear",edge_attr=None):
+def get_loss(model, x_0, t, edge_index, total_timestep, device, mode="linear", edge_attr= None):
     """_summary_
 
     Args:
@@ -53,9 +55,9 @@ def get_loss(model, x_0, t, edge_index,total_timestep, device, mode="linear",edg
 
 
 if __name__ == "__main__":
-    # Test encoder 
-    from tqdm import tqdm 
-    import torch 
+    # Test encoder
+    from tqdm import tqdm
+    import torch
     import torch.nn as nn
     from torch_geometric.datasets import QM9
     from torch_geometric.loader import DataLoader
@@ -64,9 +66,6 @@ if __name__ == "__main__":
     import torch.nn.functional as F
     from based_model_4_4 import *
     # from test_model import Encoder
-
-
-
     data = QM9(root='./practice_data', transform=None)
 
     """
@@ -76,30 +75,30 @@ if __name__ == "__main__":
 
 
     """
-    dataloader = DataLoader(data, batch_size=1, shuffle=True) 
-
-
-    # try the customized pyg model 
-    hidden_dim = 64 # hidden dimension
-    n_feat_out = 7 # output latent embedding shape
+    dataloader = DataLoader(data, batch_size=1, shuffle=True)
+    # try the customized pyg model
+    hidden_dim = 64  # hidden dimension
+    n_feat_out = 7  # output latent embedding shape
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    num_epochs = 10 
-    timestep = 1000 
+    num_epochs = 10
+    timestep = 1000
 
-    # temperarily embedding 
+    # temperarily embedding
     embedding = nn.Embedding(4, 4).to(device)
-    # dummy = next(iter(dataloader))
-
-
-    # net = Net()
-    encoder = Net(n_feat_in=23, layers=[32,64,128], time_emb_dim=4).to(device)
-    
+    encoder = Net(
+        n_feat_in=5,
+        layers=[32, 64, 128],
+        time_emb_dim=4
+        ).to(device)
+    encoder.load_state_dict(
+        torch.load("./models/model_best_64_es4.pth")
+        )
+    import pdb ; pdb.set_trace()
     # data parallel
     # if torch.cuda.device_count() > 1:
     #     print(f"Let's use {torch.cuda.device_count()} GPUs!")
-    #     encoder = nn.parallel.DataParallel(encoder) 
+    #     encoder = nn.parallel.DataParallel(encoder)
     encoder.to(device)
-    
     optimizer = torch.optim.Adam(encoder.parameters(), lr=0.001)
     print(encoder)
 

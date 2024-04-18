@@ -12,10 +12,9 @@ import os.path
 
 
 """
-python pretrain_gnn.py --experiment gnn 
+python pretrain_gnn.py --experiment gnn
 --experiment_run run1  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
 """
-
 
 if __name__ == "__main__":
     import argparse
@@ -31,8 +30,6 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3)
     args = parser.parse_args()
     args_dict = vars(args)
-    
-
 
     # configs
     wandb.init(
