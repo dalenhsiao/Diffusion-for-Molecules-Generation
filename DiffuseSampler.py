@@ -18,7 +18,7 @@ class DiffusionModel(nn.Module):
         self.timestep = timesteps
         ########### pre-calculated terms
         # sampler = DiffusionModel()
-        self.betas = self.sampler.beta_scheduler(timesteps=timesteps, mode=noise_schedule).to(self.device)
+        self.betas = self.beta_scheduler(timesteps=timesteps, mode=noise_schedule).to(self.device)
         self.alphas = 1. - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0).to(self.device)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0).to(self.device)
@@ -108,7 +108,7 @@ class DiffusionModel(nn.Module):
         while considering the batch dimension.
         """
         batch_size = t.shape[0]
-        out = vals.gather(-1, t.cpu())
+        out = vals.gather(-1, t)
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)     
             
     def sample_forward_diffuse_training(self,x_0, total_timestep, t,device, sampling_mode="linear"):
@@ -127,8 +127,8 @@ class DiffusionModel(nn.Module):
             sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - self.alphas_cumprod)
             posterior_variance = self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)
             noise = torch.randn_like(x_0) # sampling noise
-            sqrt_alphas_cumprod_t = self.sampler.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
-            sqrt_one_minus_alphas_cumprod_t = self.sampler.get_index_from_list(
+            sqrt_alphas_cumprod_t = self.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
+            sqrt_one_minus_alphas_cumprod_t = self.get_index_from_list(
                 sqrt_one_minus_alphas_cumprod, t, x_0.shape
             )
             # mean + variance
