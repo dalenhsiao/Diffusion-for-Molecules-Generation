@@ -1,31 +1,31 @@
 # loading the pretrained model into diffusion
 
-from DiffuseSampler import DiffuseSampler
+# from DiffuseSampler import DiffuseSampler
 
 
-# get loss for diffusion process
-def get_loss(model, x_0, t, edge_index, total_timestep, device, mode="linear", edge_attr= None):
-    """_summary_
+# # get loss for diffusion process
+# def get_loss(model, x_0, t, edge_index, total_timestep, device, mode="linear", edge_attr= None):
+#     """_summary_
 
-    Args:
-        x_0 (Tensor): ground truth data
-        edge_index (Tensor): edge index -> shape = (2, edge)
-        total_timestep (int): Total timesteps
-        t (Tensor): timesteps sample -> (n_batch, )
-        device : device
-        mode (String): "linear", "cosine" schedule for noise scheduling 
-        edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
+#     Args:
+#         x_0 (Tensor): ground truth data
+#         edge_index (Tensor): edge index -> shape = (2, edge)
+#         total_timestep (int): Total timesteps
+#         t (Tensor): timesteps sample -> (n_batch, )
+#         device : device
+#         mode (String): "linear", "cosine" schedule for noise scheduling 
+#         edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
 
-    Returns:
-        _type_: _description_
-    """
-    # generate sample 
+#     Returns:
+#         _type_: _description_
+#     """
+#     # generate sample 
     
-    x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
-    pred_noise = model(x_noised, t, edge_index, edge_attr)
-    metric = nn.MSELoss()
-    loss = metric(pred_noise, noise)
-    return loss
+#     x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
+#     pred_noise = model(x_noised, t, edge_index, edge_attr)
+#     metric = nn.MSELoss()
+#     loss = metric(pred_noise, noise)
+#     return loss
 
 # def get_loss(pred_noise, x_0, t,total_timestep, device, mode="linear"):
 #     """_summary_
@@ -51,6 +51,21 @@ def get_loss(model, x_0, t, edge_index, total_timestep, device, mode="linear", e
 #     loss = metric(pred_noise, noise)
 #     return loss
 
+import argparse
+def arg_parse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment", "-exp", type=str, default="gnn")
+    parser.add_argument("--experiment_run", "-r", type=str, default="experiement_run")
+    # parser.add_argument("--save_model_dir", type=str, default=os.path.realpath())
+    parser.add_argument("--diffuse_timesteps", "-tsteps", type=int, default=100)
+    parser.add_argument("--max_epochs", type=int, default=10)
+    parser.add_argument("--early_stopping", "-es", type=int, default=5)
+    parser.add_argument("--batch_size", "-bs", type=int, default=64)
+    parser.add_argument("--layers", nargs='+', type=int, default=[32, 64, 128])
+    parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3)
+    args = parser.parse_args()
+    args_dict = vars(args)
+    return args_dict
 
 
 
@@ -64,8 +79,12 @@ if __name__ == "__main__":
     import torch_geometric.transforms as T
     from torch_geometric.nn import NNConv
     import torch.nn.functional as F
+    from DiffuseSampler import DiffusionModel
     from based_model_4_4 import *
+    import wandb 
     # from test_model import Encoder
+    
+    args_dict = arg_parse()
     data = QM9(root='./practice_data', transform=None)
 
     """
@@ -73,55 +92,92 @@ if __name__ == "__main__":
     in EGNN, they introduce the concept of l2 distance between nodes, 
     yet I am not including this (probably not) for now. 
 
-
     """
-    dataloader = DataLoader(data, batch_size=1, shuffle=True)
-    # try the customized pyg model
-    hidden_dim = 64  # hidden dimension
-    n_feat_out = 7  # output latent embedding shape
+    
+    """
+    python mole_diffuse.py --experiment diffusion_gnn --experiment_run diffusion_with_layer_norm  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
+    """
+    # api = wandb.Api()
+    # run = api.run("dalenhsiao/Projects/pretrain_gnn/Runs/train_gnn_with_embedded_h_run1")
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    num_epochs = 10
-    timestep = 1000
+    
+    # configs
+    wandb.init(
+            project=args_dict["experiment"],
+            name=args_dict["experiment_run"],
+            config={
+                "epochs": args_dict["max_epochs"],
+                "early_stopping": args_dict["early_stopping"],
+                "time_step": args_dict["diffuse_timesteps"],
+                "batch_size": args_dict["batch_size"],
+                "layers": args_dict["layers"],
+                "lr": args_dict["learning_rate"]
+                })
+    config = wandb.config
 
     # temperarily embedding
-    embedding = nn.Embedding(4, 4).to(device)
-    encoder = Net(
+    dataloader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
+    embedding = nn.Embedding(5, 1).to(device)
+    # GNN net
+    net = Net(
         n_feat_in=5,
-        layers=[32, 64, 128],
+        layers=config.layers,
         time_emb_dim=4
         ).to(device)
-    encoder.load_state_dict(
-        torch.load("./models/model_best_64_es4.pth")
+    net.load_state_dict(
+        torch.load("./models/model_best_64_nn_embed.pth")
         )
-    import pdb ; pdb.set_trace()
-    # data parallel
-    # if torch.cuda.device_count() > 1:
-    #     print(f"Let's use {torch.cuda.device_count()} GPUs!")
-    #     encoder = nn.parallel.DataParallel(encoder)
-    encoder.to(device)
-    optimizer = torch.optim.Adam(encoder.parameters(), lr=0.001)
-    print(encoder)
-
+    # diffusion model
+    diffusion = DiffusionModel(
+        net,
+        timesteps=config.time_step
+    ).to(device)
+    # training
+    optimizer = torch.optim.Adam(net.parameters(), lr=config.lr)
+    num_epochs = config.epochs
+    timestep = config.time_step
+    criterion = nn.MSELoss()
+    best_loss = np.inf
     # print(cat.shape[1])
     for epoch in range(num_epochs):
         running_loss = 0
         with tqdm(dataloader) as tepoch:
-            for data in tepoch:
+            for step, data in enumerate(tepoch):
                 tepoch.set_description(f'Epoch {epoch}')
                 # optimizer.zero_grad()
                 data = data.to(device)
-                # x = torch.concat((data.x[:,:4],data.pos), axis=1) # node features -> one hot vector + positional information
                 x = data.x[:,:5].long().to(device)
-                pos = data.pos.to(device)
                 h = torch.flatten(embedding(x), start_dim= 1)
                 ts = torch.randint(0, timestep, (data.x.shape[0],), device=device).long()
-                h = torch.concat((h, pos), axis=1)
-                # out = encoder(data.x, ts, data.edge_index)
-                # pred_noise = encoder(h,ts, data.edge_index)
-                loss = get_loss(encoder, h, ts, data.edge_index, timestep, device)
-                # loss = get_loss(pred_noise, h,ts,timestep)
+                # h = torch.concat((h, pos), axis=1)
+                h_noisy, noise = diffusion.sample_forward_diffuse_training(h, ts, device=device)
+                pred_noise, h_0 = diffusion.model_prediction(h_noisy, ts, data.edge_index)
+                loss = criterion(pred_noise, noise)
                 loss.backward()
                 optimizer.step()
                 running_loss += (loss.item()/len(dataloader))
-                tepoch.set_postfix(train_loss=running_loss)
+                metrics = {
+                        "train/train_loss": loss.item(),
+                        "global_step": epoch * len(dataloader) + step, 
+                        }
+                wandb.log(metrics)
+                tepoch.set_postfix(train_loss = loss.item())
+        wandb.log({"epoch": epoch, "train/epoch_train_loss": running_loss})
+        if running_loss < best_loss:
+            early_stop = 0
+            print(f"model converges, {best_loss} -> {running_loss}")
+            best_loss = running_loss
+            print("saving best model ....")
+            model_path = "./models/diffusion_model.pth"
+            torch.save(net.state_dict(), model_path)
+            wandb.save(model_path)
+        else:
+            early_stop += 1
+            if early_stop == config.early_stopping:
+                print(f"No improvement in {config.early_stopping}, finish training")
+
+    wandb.finish()
+
+                
             

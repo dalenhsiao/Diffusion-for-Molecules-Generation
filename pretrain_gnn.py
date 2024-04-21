@@ -9,15 +9,8 @@ import wandb
 import math
 import numpy as np
 import os.path
-
-
-"""
-python pretrain_gnn.py --experiment gnn
---experiment_run run1  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
-"""
-
-if __name__ == "__main__":
-    import argparse
+import argparse
+def arg_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", "-exp", type=str, default="gnn")
     parser.add_argument("--experiment_run", "-r", type=str, default="experiement_run")
@@ -30,7 +23,15 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3)
     args = parser.parse_args()
     args_dict = vars(args)
+    return args_dict
 
+
+"""
+python pretrain_gnn.py --experiment pretrain_gnn --experiment_run train_gnn_with_embedded_h_and_layer_normalize  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
+"""
+
+if __name__ == "__main__":
+    args_dict = arg_parse()
     # configs
     wandb.init(
             project=args_dict["experiment"],
@@ -69,9 +70,10 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(net.parameters(), lr=config.lr)
     criterion = nn.CrossEntropyLoss()
     n_steps_per_epoch = math.ceil(len(dataloader) / config.batch_size)
-
     best_loss = np.inf
 
+    # embedding 
+    embedding = nn.Embedding(5, 1).to(device)
     early_stop = 0
     for epoch in range(config.epochs):
         running_loss = 0
@@ -80,9 +82,10 @@ if __name__ == "__main__":
                 tepoch.set_description(f"Epoch {epoch}")
                 optimizer.zero_grad()
                 data = data.to(device)
-                x = data.x[:, :5]
+                x = data.x[:, :5].to(device)
+                h = torch.flatten(embedding(x.long()), start_dim=1)
                 ts = torch.fill(torch.empty((data.x.shape[0], )), 0).to(device)
-                out = net(x, ts, data.edge_index.to(device))
+                out = net(h, ts, data.edge_index.to(device))
                 loss = criterion(out, x)
                 running_loss += loss.item() / len(dataloader)
                 loss.backward()
@@ -99,7 +102,7 @@ if __name__ == "__main__":
             print(f"model converges, {best_loss} -> {running_loss}")
             best_loss = running_loss
             print("saving best model ....")
-            model_path = "./models/model_best_64_es5.pth"
+            model_path = "./models/model_best_64_nn_embed.pth"
             torch.save(net.state_dict(), model_path)
             wandb.save(model_path)
         else:

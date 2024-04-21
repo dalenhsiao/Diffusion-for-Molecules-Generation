@@ -111,7 +111,7 @@ class DiffusionModel(nn.Module):
         out = vals.gather(-1, t)
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)     
             
-    def sample_forward_diffuse_training(self,x_0, total_timestep, t,device, sampling_mode="linear"):
+    def sample_forward_diffuse_training(self,x_0, t, device):
             """
             Takes a sample and a timestep as input and
             returns the noisy version of it
@@ -122,10 +122,10 @@ class DiffusionModel(nn.Module):
             
 
             """
-            sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
+            # sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
             sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
             sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - self.alphas_cumprod)
-            posterior_variance = self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)
+            # posterior_variance = (self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)).clamp(min=1e-20)
             noise = torch.randn_like(x_0) # sampling noise
             sqrt_alphas_cumprod_t = self.get_index_from_list(sqrt_alphas_cumprod, t, x_0.shape) # sqrt_alphas (pre-calculated noises)
             sqrt_one_minus_alphas_cumprod_t = self.get_index_from_list(
@@ -152,13 +152,13 @@ class DiffusionModel(nn.Module):
         coef2 = extract(self.x_0_pred_coef_2, t, x_t.shape)
         x_0 = coef1 * (x_t - coef2 * pred_noise)
         ##########
-        # x_0 = torch.clamp(x_0, -1, 1) # maybe we need clamp but will have to figure out how to clamp 
+        x_0 = torch.clamp(x_0, -2, 2) # maybe we need clamp but will have to figure out how to clamp 
         
         return (pred_noise, x_0)
         
     
     @torch.no_grad()
-    def pred_denoise_at_prev_step(self, x,t):
+    def pred_denoise_at_prev_step(self, x, t):
         #### why t is integer.... turns out t is not an integer wtf
         pred_noise, x_0 = self.model_prediction(x,t)
         posterior_mean, posterior_variance, posterior_log_variance_clipped = self.get_posterior_parameters(x_0, x, t)
@@ -180,7 +180,7 @@ class DiffusionModel(nn.Module):
         return molecule
     
     @torch.no_grad()
-    def sample(self,x_shape:tuple):
+    def sample(self, x_shape:tuple):
         z = torch.randn(x_shape, device=self.betas.device)
         return self.sampling_ddpm(x_shape, z)
     @torch.no_grad()
