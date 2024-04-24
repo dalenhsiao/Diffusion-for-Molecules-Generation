@@ -90,7 +90,16 @@ class NNEdgeAttr(nn.Module):
 # Encoder 
 class Net(nn.Module):
     # def __init__(self, n_feat_in, hidden_dim, latent_dim, time_emb_dim,n_layers, activation= nn.SiLU(), edge_attr_dim = None):
-    def __init__(self, n_feat_in, layers, time_emb_dim, activation= nn.SiLU(), edge_attr_dim = 0):
+    def __init__(
+        self,
+        n_feat_in,
+        layers,
+        time_emb_dim,
+        activation= nn.SiLU(),
+        edge_attr_dim = 0,
+        fine_tune = False,
+        freeze_pretrain = False
+    ):
         super(Net, self).__init__()
         """
         n_feat_in: number of features input 
@@ -103,31 +112,40 @@ class Net(nn.Module):
         # self.n_layers = n_layers
         self.layers = layers
         self.act = activation
+        self.fine_tune = fine_tune
         self.layer0 = nn.Linear(n_feat_in, self.layers[0]) # initialize the embedding layer
         self.layer_out = nn.Linear(self.layers[0], n_feat_in) # output embedding layer (latent space)
+        self.freeze = freeze_pretrain
+        if self.fine_tune:
+            self.last_layer_new = nn.Linear(self.layers[0], n_feat_in)
         self.edge_attr_dim = edge_attr_dim
         self.time_mlp = nn.Sequential(
                 SinusoidalPositionEmbeddings(time_emb_dim),
                 nn.Linear(time_emb_dim, time_emb_dim),
                 nn.ReLU() # maybe modify?
             )
-        
-    
-        
         ### Encoder (Downsampling)
         # graph convolution layers
-        
         self.downsampling = nn.ModuleList([
             GraphConv(in_channels=self.layers[i], out_channels=self.layers[i+1], time_emb_dim=time_emb_dim, edge_attr_dim = self.edge_attr_dim, aggr='add', activation=self.act)
             for i in range(0,len(self.layers)-1)
         ]
         )
-        
         ### Decoder (Upsampling)
         self.upsampling = nn.ModuleList([
             GraphConv(in_channels=self.layers[i], out_channels=self.layers[i-1],time_emb_dim=time_emb_dim, edge_attr_dim=self.edge_attr_dim, aggr='add', activation=self.act)
             for i in reversed(range(1, len(self.layers)))
         ])
+        # Freeze pretrain parameters
+        if self.fine_tune and self.freeze:
+            for params in self.layer0.parameters():
+                params.requires_grad = False
+            for params in self.downsampling.parameters():
+                params.requires_grad = False
+            for params in self.upsampling.parameters():
+                params.requires_grad = False
+            for params in self.layer_out.parameters():
+                params.requires_grad = False
         
         self.act = nn.LogSoftmax(dim=1)
             
@@ -163,39 +181,9 @@ class Net(nn.Module):
         # upsampling 
         for up in self.upsampling:
             h = up(h, edge_index, t, edge_attr)
-        logits = self.layer_out(h)
-        out = self.act(logits) # converting the logits to probability
+        if self.fine_tune:
+            out = self.last_layer_new()
+        else:  
+            logits = self.layer_out(h)
+            out = self.act(logits) # converting the logits to probability
         return out
-    
-    
-    # # get loss for diffusion process
-    # def get_loss(self, x_0, t, edge_index,total_timestep, device, mode="linear",edge_attr=None):
-    #     """_summary_
-
-    #     Args:
-    #         x_0 (Tensor): ground truth data
-    #         edge_index (Tensor): edge index -> shape = (2, edge)
-    #         total_timestep (int): Total timesteps
-    #         t (Tensor): timesteps sample -> (n_batch, )
-    #         device : device
-    #         mode (String): "linear", "cosine" schedule for noise scheduling 
-    #         edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
-
-    #     Returns:
-    #         _type_: _description_
-    #     """
-    #     # generate sample 
-        
-    #     x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
-    #     pred_noise = self.forward(x_noised, t, edge_index, edge_attr)
-    #     metric = nn.MSELoss()
-    #     loss = metric(pred_noise, noise)
-    #     return loss
-    
-    
-
-        
-        
-        
-
-    
