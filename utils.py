@@ -46,3 +46,15 @@ def extract(a, t, x_shape):
 # normalization functions
 def unnormalize_to_zero_to_one(t):
     return (t + 1) * 0.5
+
+def min_max_scale(x):
+    # Compute the min and max values of the tensor along the feature dimension
+    min_val = torch.min(x, dim=0, keepdim=True).values
+    max_val = torch.max(x, dim=0, keepdim=True).values
+    
+    # Compute the range and add a small epsilon to prevent division by zero
+    range_val = max_val - min_val + 1e-10
+    
+    # Scale x to the range [0, 1]
+    x_scaled = (x - min_val) / range_val
+    return x_scaled

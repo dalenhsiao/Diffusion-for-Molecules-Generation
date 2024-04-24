@@ -3,7 +3,8 @@ import torch.nn as nn
 import math
 from torch_geometric.nn import NNConv, GATConv, GCNConv
 import torch.nn.functional as F
-from tqdm import tqdm 
+from tqdm import tqdm
+from utils import *
 
 # Graph Convolution Layer
 class GraphConv(nn.Module):
@@ -23,7 +24,7 @@ class GraphConv(nn.Module):
         
         
         self.time_mlp = nn.Linear(time_emb_dim, out_channels) # (n_sample, out_channels)
-        
+        self.layer_norm = nn.LayerNorm(out_channels)
 
         
         if attention: 
@@ -41,7 +42,8 @@ class GraphConv(nn.Module):
             x = self.activation(self.gc(x,edge_index))
         else:
             x = self.activation(self.gc_edge_attr(x, edge_index, edge_attr))
-            x = self.activation(self.linear(x))
+            x = self.linear(x)
+            x = self.activation(self.layer_norm(x))
             
             
         time_emb = self.activation(self.time_mlp(t))
@@ -104,21 +106,6 @@ class Net(nn.Module):
         self.layer0 = nn.Linear(n_feat_in, self.layers[0]) # initialize the embedding layer
         self.layer_out = nn.Linear(self.layers[0], n_feat_in) # output embedding layer (latent space)
         self.edge_attr_dim = edge_attr_dim
-        # hidden_ = (64, 128, 256)
-        
-        # time embeddings
-
-        # time_dim = dim * 4
-
-        # sinu_pos_emb = SinusoidalPosEmb(dim)
-        # fourier_dim = dim
-
-        # self.time_mlp = nn.Sequential(
-        #     sinu_pos_emb,
-        #     nn.Linear(fourier_dim, time_dim),
-        #     nn.GELU(),
-        #     nn.Linear(time_dim, time_dim)
-        # )
         self.time_mlp = nn.Sequential(
                 SinusoidalPositionEmbeddings(time_emb_dim),
                 nn.Linear(time_emb_dim, time_emb_dim),
@@ -142,6 +129,7 @@ class Net(nn.Module):
             for i in reversed(range(1, len(self.layers)))
         ])
         
+        self.act = nn.LogSoftmax(dim=1)
             
         # Pooling layers
         """
@@ -156,7 +144,7 @@ class Net(nn.Module):
         """_summary_
 
         Args:
-            x (_type_): node features
+            x (_type_): node features (node embedding with nn.Embedding)
             timestep (_type_): time step for noising (n_batch, )
             edge_index (_type_): edge index matrix, shape = [2, num_edges]
             edge_attr (_type_): edge attributes, default None
@@ -165,32 +153,18 @@ class Net(nn.Module):
         Returns:
             h: graph latent representation
         """
+        # min-max scaling
+        x = min_max_scale(x) # 0 and 1 
         h = self.layer0(x) # initialize node embedding
-        # batched_times = torch.full((img.shape[0],), t, device=self.device, dtype=torch.long)
         t = self.time_mlp(timestep)
-        # print("initial h:", h.shape)
-        
-        # for i in range(self.n_layers):
-        #     # print("running gcl_%d" % i)
-        #     # h = self._modules["gcl_%d" % i](h, edge_index, edge_attr)
-        #     # print("h in the loop:", h.shape)
-        #     h = self.
-        
         # downsampling 
         for down in self.downsampling:
             h = down(h, edge_index, t, edge_attr)
-        
-        
-        # bottle neck 
-        
-        
         # upsampling 
         for up in self.upsampling:
             h = up(h, edge_index, t, edge_attr)
-            
-        
-        out = self.layer_out(h)
-    
+        logits = self.layer_out(h)
+        out = self.act(logits) # converting the logits to probability
         return out
     
     
