@@ -129,6 +129,7 @@ class Net(nn.Module):
             for i in reversed(range(1, len(self.layers)))
         ])
         
+        self.act = nn.LogSoftmax(dim=1)
             
         # Pooling layers
         """
@@ -153,34 +154,17 @@ class Net(nn.Module):
             h: graph latent representation
         """
         # min-max scaling
-        x = min_max_scale(x)
-        
+        x = min_max_scale(x) # 0 and 1 
         h = self.layer0(x) # initialize node embedding
-        # batched_times = torch.full((img.shape[0],), t, device=self.device, dtype=torch.long)
         t = self.time_mlp(timestep)
-        # print("initial h:", h.shape)
-        
-        # for i in range(self.n_layers):
-        #     # print("running gcl_%d" % i)
-        #     # h = self._modules["gcl_%d" % i](h, edge_index, edge_attr)
-        #     # print("h in the loop:", h.shape)
-        #     h = self.
-        
         # downsampling 
         for down in self.downsampling:
             h = down(h, edge_index, t, edge_attr)
-        
-        
-        # bottle neck 
-        
-        
         # upsampling 
         for up in self.upsampling:
             h = up(h, edge_index, t, edge_attr)
-            
-        
-        out = self.layer_out(h)
-    
+        logits = self.layer_out(h)
+        out = self.act(logits) # converting the logits to probability
         return out
     
     
