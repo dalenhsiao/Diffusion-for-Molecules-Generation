@@ -11,8 +11,6 @@ class GraphConv(nn.Module):
     def __init__(self, in_channels, out_channels, time_emb_dim, edge_attr_dim=0, aggr="mean",activation=nn.SiLU(), attention=False):
         super(GraphConv, self).__init__()
         self.activation = activation
-        
-        
         if edge_attr_dim > 0:
             nn_model = nn.Sequential(
                     nn.Linear(edge_attr_dim, 32), 
@@ -182,7 +180,7 @@ class Net(nn.Module):
         for up in self.upsampling:
             h = up(h, edge_index, t, edge_attr)
         if self.fine_tune:
-            out = self.last_layer_new()
+            out = self.last_layer_new(h)
         else:  
             logits = self.layer_out(h)
             out = self.act(logits) # converting the logits to probability
