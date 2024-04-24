@@ -22,6 +22,8 @@ class DiffusionModel(nn.Module):
         self.alphas = 1. - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0).to(self.device)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0).to(self.device)
+        # num timestep for diffusion sampling
+        self.num_timesteps = self.betas.shape[0]
         
         ###############################
         # Precompute values needed for the diffusion forward processs
@@ -152,37 +154,43 @@ class DiffusionModel(nn.Module):
         coef2 = extract(self.x_0_pred_coef_2, t, x_t.shape)
         x_0 = coef1 * (x_t - coef2 * pred_noise)
         ##########
-        x_0 = torch.clamp(x_0, -2, 2) # maybe we need clamp but will have to figure out how to clamp 
-        
+        x_0 = torch.clamp(x_0, 0, 1)
         return (pred_noise, x_0)
-        
-    
+
     @torch.no_grad()
-    def pred_denoise_at_prev_step(self, x, t):
+    def predict_denoised_at_prev_timestep(self, x, t, edge_index):
         #### why t is integer.... turns out t is not an integer wtf
-        pred_noise, x_0 = self.model_prediction(x,t)
+        pred_noise, x_0 = self.model_prediction(x,t, edge_index)
         posterior_mean, posterior_variance, posterior_log_variance_clipped = self.get_posterior_parameters(x_0, x, t)
         pred_molecule = posterior_mean + torch.sqrt(posterior_variance) * torch.randn_like(x) 
         return pred_molecule, x_0
-        
+    
+    def sample_times(self, total_timesteps, sampling_timesteps):
+        times = torch.linspace(-1, total_timesteps - 1, steps=sampling_timesteps + 1)
+        return list(reversed(times.int().tolist()))
     
     @torch.no_grad()
-    def sampling_ddpm(self,shape, z):
+    def sampling_ddpm(self,shape, z, edge_index):
         """
         diffusion sampling 
-        
         """
         molecule = z
-        for t in tqdm(range(self.total_timestep-1,0,-1)):
+        for t in tqdm(
+            range(self.num_timesteps-1,0,-1),
+            desc="Denoising Timesteps",
+            total=self.num_timesteps-1,
+            bar_format="{l_bar}{bar}| timestep {n_fmt}/{total_fmt} [{rate_fmt}]"
+            ):
             batched_times = torch.full((shape[0],), t, device=self.device, dtype=torch.long)
-            molecule, _ = self.predict_denoised_at_prev_timestep(molecule, batched_times)
+            molecule, _ = self.predict_denoised_at_prev_timestep(molecule, batched_times, edge_index)
         # img = unnormalize_to_zero_to_one(img) # maybe we have to do a certain level of scaling
         return molecule
     
     @torch.no_grad()
-    def sample(self, x_shape:tuple):
-        z = torch.randn(x_shape, device=self.betas.device)
-        return self.sampling_ddpm(x_shape, z)
+    def sample(self, x_shape:tuple, edge_index):
+        z = torch.randn(x_shape, device=self.betas.device) # random sampling noise
+        return self.sampling_ddpm(x_shape, z, edge_index.to(self.betas.device))
+    
     @torch.no_grad()
     def sample_given_z(self, z, x_shape):
         # sample_fn = self.sample_ddpm if not self.is_ddim_sampling else self.sample_ddim
