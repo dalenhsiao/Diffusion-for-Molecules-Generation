@@ -13,13 +13,13 @@ def sampling(model, diffusion, data_shape, edge_index):
     generated_sample = generated_sample.detach().cpu().numpy()
     return generated_sample
 
-def save_sample(data, fp, sample_num: int):
-    if os.path.exists(fp):
+def save_sample(data, root, sample_num: int):
+    if os.path.exists(root):
         pass
     else:
         # Ensure the directory exists
-        os.makedirs(fp, exist_ok=True)
-    mole_file = os.path.join(fp, f"sample{sample_num}.txt")
+        os.makedirs(root, exist_ok=True)
+    mole_file = os.path.join(root, f"sample{sample_num}.txt")
     np.savetxt(mole_file, data, delimiter=' ', fmt='%d', header='H C N O F')
 
 def sample_qm9(num_sample):
@@ -58,7 +58,7 @@ def arg_parse():
 
 
 """
-python molecule_sampling.py --experiment molecule_generation --experiment_run gen_with_NLL_trained_model --num_sample 10 --load_model_param model_NLL --diffuse_timesteps 100 --layers 32 64 128
+python molecule_sampling.py --experiment molecule_generation --experiment_run diffusion_model_fine_tuned --num_sample 10 --load_model_param diffusion_model_fine_tuned --diffuse_timesteps 100 --layers 32 64 128
 """
 
 """
@@ -75,17 +75,19 @@ if __name__ == "__main__":
     
     
     args_dict = arg_parse()
-    models_path = "models"
+    models_path = "diffusion_models"
     pth = os.path.join(models_path, f"{args_dict["load_model_param"]}.pth")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     random_sample = sample_qm9(args_dict["num_sample"])
     data_shape = [(sample.x.shape[0], 5) for sample in random_sample] # one single molecule sample
+    sample_fp = os.path.join("sampling", f"{args_dict["experiment_run"]}")
     # import pdb ; pdb.set_trace()
     # GNN model
     net = Net(
         n_feat_in=5,
         layers=args_dict["layers"],
-        time_emb_dim=4
+        time_emb_dim=4,
+        fine_tune=True
         ).to(device)
     net.load_state_dict(
         torch.load(pth)
@@ -98,6 +100,5 @@ if __name__ == "__main__":
     # Generating sample
     for idx, sample in enumerate(random_sample):
         gen_sample = sampling(net, diffusion, data_shape[idx], sample.edge_index.to(device))
-        # import pdb; pdb.set_trace()
-        save_sample(gen_sample, "sampling", idx)
+        save_sample(gen_sample, sample_fp, idx)
         print("sample created")

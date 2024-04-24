@@ -4,7 +4,8 @@ def arg_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", "-exp", type=str, default="gnn")
     parser.add_argument("--experiment_run", "-r", type=str, default="experiement_run")
-    # parser.add_argument("--save_model_dir", type=str, default=os.path.realpath())
+    parser.add_argument("--load_model_dir", type=str, default="model")
+    parser.add_argument("--save_model_dir", type=str, default="model")
     parser.add_argument("--diffuse_timesteps", "-tsteps", type=int, default=100)
     parser.add_argument("--max_epochs", type=int, default=10)
     parser.add_argument("--early_stopping", "-es", type=int, default=5)
@@ -14,7 +15,6 @@ def arg_parse():
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict
-
 
 
 if __name__ == "__main__":
@@ -29,7 +29,8 @@ if __name__ == "__main__":
     import torch.nn.functional as F
     from DiffuseSampler import DiffusionModel
     from based_model_4_4 import *
-    import wandb 
+    import wandb
+    import os
     # from test_model import Encoder
     
     args_dict = arg_parse()
@@ -43,13 +44,11 @@ if __name__ == "__main__":
     """
     
     """
-    python mole_diffuse.py --experiment diffusion_gnn --experiment_run diffusion_with_layer_norm  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
+    python mole_diffuse.py --experiment diffusion_gnn --experiment_run diffusion_non_freeze_pretrain --load_model_dir model_NLL --save_model_dir diffusion_model_fine_tuned --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
     """
     # api = wandb.Api()
     # run = api.run("dalenhsiao/Projects/pretrain_gnn/Runs/train_gnn_with_embedded_h_run1")
-    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
     # configs
     wandb.init(
             project=args_dict["experiment"],
@@ -63,6 +62,8 @@ if __name__ == "__main__":
                 "lr": args_dict["learning_rate"]
                 })
     config = wandb.config
+    load_model_pth = os.path.join("models", f"{args_dict["load_model_dir"]}.pth")
+    model_pth = os.path.join("diffusion_models", f"{args_dict["save_model_dir"]}.pth")
 
     # temperarily embedding
     dataloader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
@@ -71,10 +72,12 @@ if __name__ == "__main__":
     net = Net(
         n_feat_in=5,
         layers=config.layers,
-        time_emb_dim=4
+        time_emb_dim=4,
+        fine_tune=True
         ).to(device)
     net.load_state_dict(
-        torch.load("./models/model_best_64_nn_embed.pth")
+        torch.load(load_model_pth),
+        strict = False
         )
     # diffusion model
     diffusion = DiffusionModel(
@@ -117,9 +120,8 @@ if __name__ == "__main__":
             print(f"model converges, {best_loss} -> {running_loss}")
             best_loss = running_loss
             print("saving best model ....")
-            model_path = "./models/diffusion_model.pth"
-            torch.save(net.state_dict(), model_path)
-            wandb.save(model_path)
+            torch.save(net.state_dict(), model_pth)
+            wandb.save(model_pth)
         else:
             early_stop += 1
             if early_stop == config.early_stopping:
