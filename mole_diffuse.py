@@ -1,56 +1,4 @@
 # loading the pretrained model into diffusion
-
-# from DiffuseSampler import DiffuseSampler
-
-
-# # get loss for diffusion process
-# def get_loss(model, x_0, t, edge_index, total_timestep, device, mode="linear", edge_attr= None):
-#     """_summary_
-
-#     Args:
-#         x_0 (Tensor): ground truth data
-#         edge_index (Tensor): edge index -> shape = (2, edge)
-#         total_timestep (int): Total timesteps
-#         t (Tensor): timesteps sample -> (n_batch, )
-#         device : device
-#         mode (String): "linear", "cosine" schedule for noise scheduling 
-#         edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
-
-#     Returns:
-#         _type_: _description_
-#     """
-#     # generate sample 
-    
-#     x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
-#     pred_noise = model(x_noised, t, edge_index, edge_attr)
-#     metric = nn.MSELoss()
-#     loss = metric(pred_noise, noise)
-#     return loss
-
-# def get_loss(pred_noise, x_0, t,total_timestep, device, mode="linear"):
-#     """_summary_
-
-#     Args:
-#         x_0 (Tensor): ground truth data
-#         edge_index (Tensor): edge index -> shape = (2, edge)
-#         total_timestep (int): Total timesteps
-#         t (Tensor): timesteps sample -> (n_batch, )
-#         device : device
-#         mode (String): "linear", "cosine" schedule for noise scheduling 
-#         edge_attr (Tensor): edge attributes -> shape = (n_edge, n_edge_feat)
-
-#     Returns:
-#         _type_: _description_
-#     """
-#     # generate sample 
-    
-#     x_noised, noise = DiffuseSampler.sample_forward_diffuse_training(x_0, total_timestep, t, device,mode) # noised, noise added
-#     print("x_noised", x_noised.shape)
-#     print("noise ", noise.shape)
-#     metric = nn.MSELoss()
-#     loss = metric(pred_noise, noise)
-#     return loss
-
 import argparse
 def arg_parse():
     parser = argparse.ArgumentParser()
@@ -178,6 +126,4 @@ if __name__ == "__main__":
                 print(f"No improvement in {config.early_stopping}, finish training")
 
     wandb.finish()
-
-                
             
