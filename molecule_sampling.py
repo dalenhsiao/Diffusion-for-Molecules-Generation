@@ -20,7 +20,7 @@ def save_sample(data, root, sample_num: int):
         # Ensure the directory exists
         os.makedirs(root, exist_ok=True)
     mole_file = os.path.join(root, f"sample{sample_num}.txt")
-    np.savetxt(mole_file, data, delimiter=' ', fmt='%d', header='H C N O F')
+    np.savetxt(mole_file, data, delimiter=' ', fmt='%s', header='H C N O F')
 
 def sample_qm9(num_sample):
     data = QM9(root='./practice_data', transform=None)
@@ -58,7 +58,7 @@ def arg_parse():
 
 
 """
-python molecule_sampling.py --experiment molecule_generation --experiment_run diffusion_model_fine_tuned --num_sample 10 --load_model_param diffusion_model_fine_tuned --diffuse_timesteps 100 --layers 32 64 128
+python molecule_sampling.py --experiment molecule_generation --experiment_run diffusion_model_fine_tuned_softmax_out --num_sample 10 --load_model_param diffusion_model_fine_tuned --diffuse_timesteps 100 --layers 32 64 128
 """
 
 """
@@ -71,7 +71,7 @@ number of nodes (atoms) and edge index are given, then generate molecule samples
 
 if __name__ == "__main__":
     from DiffuseSampler import DiffusionModel
-    from based_model_4_4 import Net
+    from base_model import Net
     
     
     args_dict = arg_parse()
