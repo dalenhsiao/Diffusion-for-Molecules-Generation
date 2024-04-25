@@ -1,4 +1,4 @@
-from based_model_4_4 import Net
+from base_model import Net
 from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 import torch_geometric.transforms as T
