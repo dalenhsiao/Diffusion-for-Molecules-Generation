@@ -82,7 +82,6 @@ class NNEdgeAttr(nn.Module):
     def forward(self,x):
         out = self.edge_attr_nn(x)
         return out
-        
 
 
 # Encoder 
@@ -186,6 +185,148 @@ class Net(nn.Module):
             out = self.act(logits) # converting the logits to probability
         return out
 
-# class RevertLatent(nn.Module):
-#     def __init__(self):
-#         super(self, RevertLatent).__init__()
+
+class LatentSpace(nn.Module):
+    def __init__(
+        self, 
+        layers: list,
+        activation: nn.Module = nn.SiLU()
+        ):
+        super(self, LatentSpace).__init__()
+        self.activation = activation
+        self.layers = layers
+        self.struc = nn.ModuleList(
+            [
+                self.block(self.layers[i], self.layers[i+1])
+                for i in range(0, len(self.layers) - 2)
+                ]
+        )
+        self.out_layer = nn.Linear(self.layers[-2], self.layers[-1])
+    
+    def block(self, in_dim, out_dim):
+        return nn.Sequential(
+            nn.Linear(in_dim, out_dim),
+            self.activation
+        )
+    
+    def forward(self, z):
+        z = self.struc(z)
+        out = self.out_layer(z)
+        return out
+
+
+class GNN(nn.Module):
+    # def __init__(self, n_feat_in, hidden_dim, latent_dim, time_emb_dim,n_layers, activation= nn.SiLU(), edge_attr_dim = None):
+    def __init__(
+        self,
+        n_feat_in,
+        layers: list,
+        latent_space_dims: list,
+        time_emb_dim: int,
+        activation= nn.SiLU(),
+        edge_attr_dim: int = 0,
+        fine_tune = False,
+        freeze_pretrain = False
+    ):
+        super(Net, self).__init__()
+        """
+        n_feat_in: number of features input 
+        layers: model structure 
+        time_emb_dim: time embedding dimension 
+        activation: activation function 
+        edge_attr_dim: edge attributes dimensions (default 0 for not using edge attributes)
+        """
+        # self.device = device
+        # self.n_layers = n_layers
+        self.layers = layers
+        self.act = activation
+        self.latent_space_dims = latent_space_dims
+        self.fine_tune = fine_tune
+        self.layer0 = nn.Linear(n_feat_in, self.layers[0]) # initialize the embedding layer
+        self.layer_out = nn.Linear(self.layers[0], n_feat_in) # output embedding layer (latent space)
+        self.freeze = freeze_pretrain
+        if self.fine_tune:
+            self.last_layer_new = nn.Linear(self.layers[0], n_feat_in)
+        self.edge_attr_dim = edge_attr_dim
+        self.time_mlp = nn.Sequential(
+                SinusoidalPositionEmbeddings(time_emb_dim),
+                nn.Linear(time_emb_dim, time_emb_dim),
+                nn.ReLU() # maybe modify?
+            )
+        ### Encoder (Downsampling)
+        # graph convolution layers
+        self.downsampling = nn.ModuleList([
+            GraphConv(in_channels=self.layers[i],
+                      out_channels=self.layers[i+1],
+                      time_emb_dim=time_emb_dim,
+                      edge_attr_dim = self.edge_attr_dim,
+                      aggr='add',
+                      activation=self.act
+                      )
+            for i in range(0,len(self.layers)-1)
+        ]
+        )
+        
+        ### latent space (where noise is added)
+        self.latent = LatentSpace(
+            [self.layers[-1], *self.latent_space_dims, self.layers[-1]],
+            activation=self.act
+        )
+        
+        ### Decoder (Upsampling)
+        self.upsampling = nn.ModuleList([
+            GraphConv(
+                in_channels=self.layers[i],
+                out_channels=self.layers[i-1],
+                time_emb_dim=time_emb_dim,
+                edge_attr_dim=self.edge_attr_dim,
+                aggr='add',
+                activation=self.act
+                )
+            for i in reversed(range(1, len(self.layers)))
+        ])
+        # Freeze pretrain parameters
+        if self.fine_tune and self.freeze:
+            for params in self.layer0.parameters():
+                params.requires_grad = False
+            for params in self.downsampling.parameters():
+                params.requires_grad = False
+            for params in self.upsampling.parameters():
+                params.requires_grad = False
+            for params in self.layer_out.parameters():
+                params.requires_grad = False
+        
+        self.act = nn.LogSoftmax(dim=1)
+            
+        # Pooling layers
+        """
+        Basically the parameters
+        
+        graph convolution:
+        - forward pass: (x:nodes embedding, edge_index: edge index, edge_attr: edge attributes)
+        
+        """
+
+    def forward(self, x, timestep, edge_index, edge_attr=None):
+        """_summary_
+        The outer GCN is a graph-to-graph model used to decypher the information in graph data,
+        comprised of GCN layers.
+        
+        The inner structure is a MLP structure used to learn the noise of the diffusion,
+        the input is the latent representation of the Graph data output by the downsampling
+        process; the output data is also latent representation to be passed to upsampling of GCN.
+        """
+        # min-max scaling
+        x = min_max_scale(x) # 0 and 1 
+        h = self.layer0(x) # initialize node embedding
+        t = self.time_mlp(timestep)
+        # downsampling 
+        for down in self.downsampling:
+            h = down(h, edge_index, t, edge_attr)
+        # latent space
+        h = self.latent(h)
+        # upsampling 
+        for up in self.upsampling:
+            h = up(h, edge_index, t, edge_attr)
+        logits = self.layer_out(h)
+        return logits
