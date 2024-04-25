@@ -12,6 +12,8 @@ def arg_parse():
     parser.add_argument("--batch_size", "-bs", type=int, default=64)
     parser.add_argument("--layers", nargs='+', type=int, default=[32, 64, 128])
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3)
+    parser.add_argument("--fine_tune", type=bool, default=True)
+    parser.add_argument("--freeze", type=bool, default=False)
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict
@@ -28,7 +30,7 @@ if __name__ == "__main__":
     from torch_geometric.nn import NNConv
     import torch.nn.functional as F
     from DiffuseSampler import DiffusionModel
-    from based_model_4_4 import *
+    from base_model import *
     import wandb
     import os
     # from test_model import Encoder
@@ -44,7 +46,7 @@ if __name__ == "__main__":
     """
     
     """
-    python mole_diffuse.py --experiment diffusion_gnn --experiment_run diffusion_non_freeze_pretrain --load_model_dir model_NLL --save_model_dir diffusion_model_fine_tuned --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
+    python mole_diffuse.py --experiment diffusion_gnn --experiment_run diffusion_freeze_pretrain --load_model_dir model_NLL --save_model_dir diffusion_model_fine_tuned_freeze --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3 --fine_tune True --freeze True
     """
     # api = wandb.Api()
     # run = api.run("dalenhsiao/Projects/pretrain_gnn/Runs/train_gnn_with_embedded_h_run1")
@@ -73,7 +75,8 @@ if __name__ == "__main__":
         n_feat_in=5,
         layers=config.layers,
         time_emb_dim=4,
-        fine_tune=True
+        fine_tune=args_dict["fine_tune"],
+        freeze_pretrain=args_dict["freeze"]
         ).to(device)
     net.load_state_dict(
         torch.load(load_model_pth),
