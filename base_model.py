@@ -23,6 +23,7 @@ class GraphConv(nn.Module):
         
         self.time_mlp = nn.Linear(time_emb_dim, out_channels) # (n_sample, out_channels)
         self.layer_norm = nn.LayerNorm(out_channels)
+        self.layer_norm2 = nn.LayerNorm(out_channels)
 
         
         if attention: 
@@ -48,7 +49,7 @@ class GraphConv(nn.Module):
         # print("shape x: ", x.shape)
         # print("shape time_emb: ", time_emb.shape)
         x += time_emb
-        x = self.activation(self.lin(x))
+        x = self.layer_norm2(self.activation(self.lin(x)))
         
         return x
 
@@ -192,7 +193,7 @@ class LatentSpace(nn.Module):
         layers: list,
         activation: nn.Module = nn.SiLU()
         ):
-        super(self, LatentSpace).__init__()
+        super(LatentSpace, self).__init__()
         self.activation = activation
         self.layers = layers
         self.struc = nn.ModuleList(
@@ -210,7 +211,8 @@ class LatentSpace(nn.Module):
         )
     
     def forward(self, z):
-        z = self.struc(z)
+        for layer in self.struc:
+            z = layer(z)
         out = self.out_layer(z)
         return out
 
@@ -228,7 +230,7 @@ class GNN(nn.Module):
         fine_tune = False,
         freeze_pretrain = False
     ):
-        super(Net, self).__init__()
+        super(GNN, self).__init__()
         """
         n_feat_in: number of features input 
         layers: model structure 
@@ -262,7 +264,7 @@ class GNN(nn.Module):
                       edge_attr_dim = self.edge_attr_dim,
                       aggr='add',
                       activation=self.act
-                      )
+            )
             for i in range(0,len(self.layers)-1)
         ]
         )
@@ -323,10 +325,24 @@ class GNN(nn.Module):
         # downsampling 
         for down in self.downsampling:
             h = down(h, edge_index, t, edge_attr)
-        # latent space
-        h = self.latent(h)
+        # latent space]
+        self.z0 = h
+        self.z = self.latent(h)
+        h = self.z
         # upsampling 
         for up in self.upsampling:
             h = up(h, edge_index, t, edge_attr)
         logits = self.layer_out(h)
         return logits
+    
+    def get_loss(
+        self,
+        logits,
+        graph_gt,
+        # beta: int = 0.5,
+        # mlp_loss_fun: nn.Module = nn.MSELoss(),
+        graph_loss_fun: nn.Module = nn.CrossEntropyLoss()
+    ):
+        # mlp_loss = mlp_loss_fun(self.z, self.z0)
+        graph_loss = graph_loss_fun(logits, graph_gt)
+        return graph_loss

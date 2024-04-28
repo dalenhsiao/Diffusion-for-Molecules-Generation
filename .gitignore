@@ -8,3 +8,6 @@ __pycache__
 
 **/*.pkl
 wandb
+models/gnn_0428.pth
+models/gnn_mlp.pth
+models/gnn.pth
