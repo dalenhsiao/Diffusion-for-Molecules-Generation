@@ -13,14 +13,22 @@ def sampling(model, diffusion, data_shape, edge_index):
     generated_sample = generated_sample.detach().cpu().numpy()
     return generated_sample
 
-def save_sample(data, fp, sample_num: int):
-    if os.path.exists(fp):
+def convert_prob_dist_to_atom_class(data: np.array):
+    labels = ['H', 'C', 'N', 'O', 'F']
+    atoms = np.array([labels[ind] for ind in np.argmax(data, axis=1)])
+    return atoms
+
+def save_sample(data: np.array, gt: np.array, root: str, sample_num: int):
+    if os.path.exists(root):
         pass
     else:
         # Ensure the directory exists
-        os.makedirs(fp, exist_ok=True)
-    mole_file = os.path.join(fp, f"sample{sample_num}.txt")
-    np.savetxt(mole_file, data, delimiter=' ', fmt='%d', header='H C N O F')
+        os.makedirs(root, exist_ok=True)
+    mole_file = os.path.join(root, f"sample{sample_num}.txt")
+    atoms = convert_prob_dist_to_atom_class(data)
+    gt_labels = convert_prob_dist_to_atom_class(gt)
+    output = np.column_stack((data, atoms, gt_labels))
+    np.savetxt(mole_file, output, delimiter=' ', fmt='%s', comments='', header='H C N O F Pred GT')
 
 def sample_qm9(num_sample):
     data = QM9(root='./practice_data', transform=None)
@@ -44,21 +52,14 @@ def sample_qm9(num_sample):
 
 def arg_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment", "-exp", type=str, default="gnn")
-    parser.add_argument("--experiment_run", "-r", type=str, default="experiement_run")
-    parser.add_argument("--load_model_param", type=str, default="models.pth")
-    
-    parser.add_argument("--num_sample", type=int, default=10)
-    parser.add_argument("--diffuse_timesteps", "-tsteps", type=int, default=100)
-    parser.add_argument("--batch_size", "-bs", type=int, default=64)
-    parser.add_argument("--layers", nargs='+', type=int, default=[32, 64, 128])
+    parser.add_argument("--configs", type=str, default="configs")
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict
 
 
 """
-python molecule_sampling.py --experiment molecule_generation --experiment_run gen_with_NLL_trained_model --num_sample 10 --load_model_param model_NLL --diffuse_timesteps 100 --layers 32 64 128
+python molecule_sampling.py --configs configs
 """
 
 """
@@ -71,21 +72,27 @@ number of nodes (atoms) and edge index are given, then generate molecule samples
 
 if __name__ == "__main__":
     from DiffuseSampler import DiffusionModel
-    from based_model_4_4 import Net
+    from base_model import *
+    from omegaconf import OmegaConf
     
     
     args_dict = arg_parse()
-    models_path = "models"
-    pth = os.path.join(models_path, f"{args_dict["load_model_param"]}.pth")
+    config = OmegaConf.load(f'{args_dict["configs"]}.yaml')
+    config = config.sampling
+    models_path = "diffusion_models"
+    pth = os.path.join(models_path, f"{config.load_model_param}.pth")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    random_sample = sample_qm9(args_dict["num_sample"])
+    random_sample = sample_qm9(config.num_sample)
     data_shape = [(sample.x.shape[0], 5) for sample in random_sample] # one single molecule sample
+    sample_fp = os.path.join("sampling", f"{config.experiment_run}")
     # import pdb ; pdb.set_trace()
     # GNN model
-    net = Net(
+    net = GNN(
         n_feat_in=5,
-        layers=args_dict["layers"],
-        time_emb_dim=4
+        layers=config.layers,
+        latent_space_dims=config.latent_space_dims,
+        time_emb_dim=4,
+        fine_tune=True
         ).to(device)
     net.load_state_dict(
         torch.load(pth)
@@ -93,11 +100,12 @@ if __name__ == "__main__":
     # diffusion model
     diffusion = DiffusionModel(
         net,
-        timesteps=args_dict["diffuse_timesteps"],
+        timesteps=config.diffuse_timesteps,
     ).to(device)
     # Generating sample
     for idx, sample in enumerate(random_sample):
         gen_sample = sampling(net, diffusion, data_shape[idx], sample.edge_index.to(device))
-        # import pdb; pdb.set_trace()
-        save_sample(gen_sample, "sampling", idx)
+        # import pdb ; pdb.set_trace()
+        gt = np.array(sample.x[:,:5])
+        save_sample(gen_sample, gt, sample_fp, idx)
         print("sample created")

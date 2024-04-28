@@ -1,0 +1,56 @@
+diffusion:
+  experiment: gnn
+  experiment_run: experiment_run
+  load_model_dir: model
+  save_model_dir: model
+  diffuse_timesteps: 100
+  epochs: 10
+  early_stopping: 5
+  batch_size: 64
+  layers:
+    - 32
+    - 64
+    - 128
+  latent_space_dims:
+    - 128
+    - 64
+    - 32
+    - 128
+  lr: 0.001
+  fine_tune: true
+  freeze: false
+
+pretrain:
+  experiment: pretrain_gnn
+  experiment_run: Pretrain_gnn_mlp_0428
+  save_model: gnn_0428
+  epochs: 20
+  early_stopping: 10
+  batch_size: 64
+  layers:
+    - 32
+    - 64
+    - 128
+  latent_space_dims:
+    - 128
+    - 64
+    - 32
+    - 128
+  lr: 0.001
+
+sampling:
+  experiment: gnn
+  experiment_run: experiment_run
+  load_model_param: diffusion_model_0428
+  num_sample: 10
+  diffuse_timesteps: 100
+  batch_size: 64
+  layers:
+    - 32
+    - 64
+    - 128
+  latent_space_dims:
+  - 128
+  - 64
+  - 32
+  - 128

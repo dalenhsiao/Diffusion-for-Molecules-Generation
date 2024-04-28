@@ -8,13 +8,13 @@ class DiffusionModel(nn.Module):
     def __init__(
         self, 
         model, 
-        timesteps = 1000, 
-        sampling_timesteps = None, 
+        timesteps=1000, 
+        sampling_timesteps=None, 
         noise_schedule="cosine"
         ):
         super(DiffusionModel, self).__init__()
         self.model = model 
-        self.device = torch.cuda.current_device()
+        self.device = next(self.model.parameters()).device
         self.timestep = timesteps
         ########### pre-calculated terms
         # sampler = DiffusionModel()
@@ -56,12 +56,8 @@ class DiffusionModel(nn.Module):
         assert self.sampling_timesteps <= timesteps
         self.is_ddim_sampling = self.sampling_timesteps < timesteps
         # self.ddim_sampling_eta = ddim_sampling_eta
-        
-        
-        ############
-        
-         
-            
+
+
     def beta_scheduler(self,timesteps, start=0.0001, end=0.02, mode="linear"): # Beta for forward pass sampling
         """
 
@@ -101,9 +97,7 @@ class DiffusionModel(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-         
-    
-    
+
     def get_index_from_list(self, vals, t, x_shape): # helper function for getting index
         """
         Returns a specific index t of a passed list of values vals
@@ -154,8 +148,25 @@ class DiffusionModel(nn.Module):
         coef2 = extract(self.x_0_pred_coef_2, t, x_t.shape)
         x_0 = coef1 * (x_t - coef2 * pred_noise)
         ##########
-        x_0 = torch.clamp(x_0, 0, 1)
+        x_0 = torch.clamp(x_0, 0, 1) # try not clamping
         return (pred_noise, x_0)
+    
+    def get_loss(
+        self,
+        h,
+        ts,
+        edge_index,
+        noise_criteria: nn.Module = nn.MSELoss(),
+        h0_criteria: nn.Module = nn.CrossEntropyLoss(),
+        alpha = 0.99
+    ): 
+        """
+        Combining the diffusion loss function with h_0 loss
+        """
+        h_noisy, noise = self.sample_forward_diffuse_training(h, ts, device=self.device)
+        pred_noise, h_0 = self.model_prediction(h_noisy, ts, edge_index)
+        loss = alpha * noise_criteria(pred_noise, noise) + (1 - alpha) * h0_criteria(h_0, h)
+        return loss
 
     @torch.no_grad()
     def predict_denoised_at_prev_timestep(self, x, t, edge_index):
@@ -170,7 +181,7 @@ class DiffusionModel(nn.Module):
         return list(reversed(times.int().tolist()))
     
     @torch.no_grad()
-    def sampling_ddpm(self,shape, z, edge_index):
+    def sampling_ddpm(self, shape, z, edge_index):
         """
         diffusion sampling 
         """
@@ -183,17 +194,30 @@ class DiffusionModel(nn.Module):
             ):
             batched_times = torch.full((shape[0],), t, device=self.device, dtype=torch.long)
             molecule, _ = self.predict_denoised_at_prev_timestep(molecule, batched_times, edge_index)
-        # img = unnormalize_to_zero_to_one(img) # maybe we have to do a certain level of scaling
+        # molecule = nn.Softmax()(molecule) # Converting the result to probability distribution
         return molecule
     
     @torch.no_grad()
-    def sample(self, x_shape:tuple, edge_index):
+    def sample(self, x_shape: tuple, edge_index):
         z = torch.randn(x_shape, device=self.betas.device) # random sampling noise
-        return self.sampling_ddpm(x_shape, z, edge_index.to(self.betas.device))
+        return self.sampling_ddpm(x_shape, z, edge_index.to(self.device))
     
     @torch.no_grad()
     def sample_given_z(self, z, x_shape):
         # sample_fn = self.sample_ddpm if not self.is_ddim_sampling else self.sample_ddim
         z = z.reshape(x_shape)
         return self.sampling_ddpm(x_shape, z)
+
+
+# class DiffusionGNN(nn.Module):
+#     def __init__(
+#         self,
+#         model,
+#         timesteps,
+#         noise_schedule = "cosine"
+#     ):
+#         super(DiffusionGNN, self).__init__()
+#         self.model = model
         
+#     def 
+    

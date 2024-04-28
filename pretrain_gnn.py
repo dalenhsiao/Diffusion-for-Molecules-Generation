@@ -1,4 +1,4 @@
-from based_model_4_4 import Net
+from base_model import *
 from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 import torch_geometric.transforms as T
@@ -12,50 +12,44 @@ import os.path
 import argparse
 def arg_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment", "-exp", type=str, default="gnn")
-    parser.add_argument("--experiment_run", "-r", type=str, default="experiement_run")
-    parser.add_argument("--save_model", type=str, default="model")
-    
-    parser.add_argument("--max_epochs", type=int, default=10)
-    parser.add_argument("--early_stopping", "-es", type=int, default=5)
-    parser.add_argument("--batch_size", "-bs", type=int, default=64)
-    parser.add_argument("--layers", nargs='+', type=int, default=[32, 64, 128])
-    parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3)
+    parser.add_argument("--configs", type=str, default="configs")
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict
 
-"""
-python pretrain_gnn.py --experiment pretrain_gnn --save_model model_NLL --experiment_run logsoftmax_in_the_last_layer  --max_epochs 20 --early_stopping 5 --batch_size 32 --layers 32 64 128 --learning_rate 1e-3
-"""
 
 if __name__ == "__main__":
+    from omegaconf import OmegaConf
     args_dict = arg_parse()
+    config = OmegaConf.load(f'{args_dict["configs"]}.yaml')
+    config = config.pretrain
     # configs
     wandb.init(
-            project=args_dict["experiment"],
-            name=args_dict["experiment_run"],
+            project=config.experiment,
+            name=config.experiment_run,
             config={
-                "epochs": args_dict["max_epochs"],
-                "early_stopping": args_dict["early_stopping"],
-                "batch_size": args_dict["batch_size"],
-                "layers": args_dict["layers"],
-                "lr": args_dict["learning_rate"]
-                })
-    config = wandb.config
-    save_model_pf = os.path.join("models", f"{args_dict["save_model"]}.pth")
+                str(key): value for key, value in config.items()
+                }
+            )
+    save_model_pf = os.path.join("models", f"{config.save_model}.pth")
     data = QM9(root='./practice_data', transform=None)
     dataloader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
     # dummy
     dummy = next(iter(dataloader))
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     print(device)
     # model
-    net = Net(
+    # net = Net(
+    #     n_feat_in=5,
+    #     layers=config.layers,
+    #     time_emb_dim=4
+    #     ).to(device)
+    net = GNN(
         n_feat_in=5,
         layers=config.layers,
+        latent_space_dims=config.latent_space_dims,
         time_emb_dim=4
-        ).to(device)
+    ).to(device)
 
 # class imbalance weights
     weights = torch.tensor(
@@ -67,7 +61,7 @@ if __name__ == "__main__":
     ).to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=config.lr)
     # Softmax is already included in the loss function, hence, NLL is used instead
-    criterion = nn.NLLLoss(weight = weights)
+    # criterion = nn.NLLLoss(weight = weights)
     n_steps_per_epoch = math.ceil(len(dataloader) / config.batch_size)
     best_loss = np.inf
     # import pdb ; pdb.set_trace()
@@ -87,7 +81,13 @@ if __name__ == "__main__":
                 ts = torch.fill(torch.empty((data.x.shape[0], )), 0).to(device)
                 out = net(h, ts, data.edge_index.to(device))
                 # import pdb; pdb.set_trace()
-                loss = criterion(out, torch.argmax(x, dim=1))
+                ######## loss function
+                # loss = criterion(out, torch.argmax(x, dim=1))
+                loss = net.get_loss(
+                    out,
+                    x,
+                    graph_loss_fun=nn.CrossEntropyLoss(weight=weights)
+                )
                 running_loss += loss.item() / len(dataloader)
                 loss.backward()
                 optimizer.step()
@@ -109,4 +109,5 @@ if __name__ == "__main__":
             early_stop += 1
             if early_stop == config.early_stopping:
                 print(f"No improvement in {config.early_stopping}, finish training")
+                break
     wandb.finish()
