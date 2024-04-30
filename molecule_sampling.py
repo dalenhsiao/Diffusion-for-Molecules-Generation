@@ -18,20 +18,22 @@ def convert_prob_dist_to_atom_class(data: np.array):
     atoms = np.array([labels[ind] for ind in np.argmax(data, axis=1)])
     return atoms
 
-def save_sample(data: np.array, gt: np.array, root: str, sample_num: int):
+def save_sample(data: np.array, adj_mat, gt: np.array, root: str, sample_num: int):
     if os.path.exists(root):
         pass
     else:
         # Ensure the directory exists
         os.makedirs(root, exist_ok=True)
     mole_file = os.path.join(root, f"sample{sample_num}.txt")
+    adj_file = os.path.join(root, f"adj_matrix_sample{sample_num}.txt")
     atoms = convert_prob_dist_to_atom_class(data)
     gt_labels = convert_prob_dist_to_atom_class(gt)
     output = np.column_stack((data, atoms, gt_labels))
     np.savetxt(mole_file, output, delimiter=' ', fmt='%s', comments='', header='H C N O F Pred GT')
+    np.savetxt(adj_file, adj_mat, delimiter=' ', fmt='%s', comments='')
 
 def sample_qm9(num_sample):
-    data = QM9(root='./practice_data', transform=None)
+    data = QM9(root='./qm9_data', transform=None)
     dataloader = DataLoader(data, batch_size=1, shuffle=True)
     sampled_data = []
     samples_collected = 0
@@ -107,5 +109,5 @@ if __name__ == "__main__":
         gen_sample = sampling(net, diffusion, data_shape[idx], sample.edge_index.to(device))
         # import pdb ; pdb.set_trace()
         gt = np.array(sample.x[:,:5])
-        save_sample(gen_sample, gt, sample_fp, idx)
+        save_sample(gen_sample, sample.edge_index, gt, sample_fp, idx)
         print("sample created")

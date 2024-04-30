@@ -40,7 +40,7 @@ pretrain:
 
 sampling:
   experiment: gnn
-  experiment_run: experiment_run
+  experiment_run: experiment_run_0429
   load_model_param: diffusion_model_0428
   num_sample: 10
   diffuse_timesteps: 100

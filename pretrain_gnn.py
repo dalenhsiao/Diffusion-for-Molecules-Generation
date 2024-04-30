@@ -32,7 +32,7 @@ if __name__ == "__main__":
                 }
             )
     save_model_pf = os.path.join("models", f"{config.save_model}.pth")
-    data = QM9(root='./practice_data', transform=None)
+    data = QM9(root='./qm9_data', transform=None)
     dataloader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
     # dummy
     dummy = next(iter(dataloader))

@@ -12,3 +12,4 @@ models/gnn_0428.pth
 models/gnn_mlp.pth
 models/gnn.pth
 sampling/diffusion_sample
+not_shown_on_github
