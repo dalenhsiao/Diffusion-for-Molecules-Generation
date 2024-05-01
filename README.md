@@ -1,4 +1,4 @@
-# Diffusion for Molecule Generation
+# Diffusion for Molecules Generation
 <img src="figs/cover.jpeg" alt="Image" width="300" height="300">
 
 This project explores the application of generative diffusion models for studying molecular data, with a specific focus on leveraging the QM9 dataset. This dataset comprises over 13,000 molecules represented using graph data structures, where each molecule is stored in graph data structure with nodes representing atoms and edges describing atomic bonds. This representation enables detailed chemical analysis and holds promise for discoveries in fields such as drug discovery and protein science. Previous research has investigated the potential of diffusion models in generating molecules [1], which serves as our primary inspiration.
