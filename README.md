@@ -4,6 +4,11 @@
 This project explores the application of generative diffusion models for studying molecular data, with a specific focus on leveraging the QM9 dataset. This dataset comprises over 13,000 molecules represented using graph data structures, where each molecule is stored in graph data structure with nodes representing atoms and edges describing atomic bonds. This representation enables detailed chemical analysis and holds promise for discoveries in fields such as drug discovery and protein science. Previous research has investigated the potential of diffusion models in generating molecules [1], which serves as our primary inspiration.
 Utilizing the [torch geometric library (PYG)](https://pytorch-geometric.readthedocs.io/en/latest/), this project explores the application of diffusion mechanism for molecules and for a broader applications of graph-based data generation.
 
+
+## AutoEncoder
+
+To transform the molecular graph data into a continuous latent space, we use an autoencoder. The encoder is a convolutional neural network that maps the molecular graph into a continuous latent space. The decoder is a convolutional neural network that maps the continuous latent space back to the molecular graph. The autoencoder is trained to minimize the reconstruction loss between the input molecular graph (adjacency matrix) and the output molecular graph.
+
 ## Model Archietecture
 
 The backbone of our proposed generative diffusion model is the Graph Neural Network (GNN). This model is designed to possess the capability to learn molecular attributes and the interconnections between atoms within a molecule. Inspired by UNet in image generation, our model incorporates both "Up Sampling" and "Down Sampling" structures. Information extraction and graph message passing are facilitated by graph convolution layers [2]. 
