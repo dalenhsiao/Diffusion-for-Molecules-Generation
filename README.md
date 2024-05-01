@@ -50,14 +50,14 @@ Configurations can be modified in `configs.yaml`
 ![molecule](figs/molecule.jpeg)
 
 ## Reference
-[1] Emiel Hoogeboom et al. Equivariant Diffusion for Molecule Generation in 3D. 2022. arXiv: 2203.17003 [cs.LG].
+[1] [Emiel Hoogeboom et al. Equivariant Diffusion for Molecule Generation in 3D. 2022. arXiv: 2203.17003 [cs.LG].](https://arxiv.org/abs/2203.17003)
 
-[2] Thomas N. Kipf and Max Welling. Semi-Supervised Classification with Graph Convolutional Net-
-works. 2017. arXiv: 1609.02907 [cs.LG].
+[2] [Thomas N. Kipf and Max Welling. Semi-Supervised Classification with Graph Convolutional Net-
+works. 2017. arXiv: 1609.02907 [cs.LG].](https://arxiv.org/abs/1609.02907)
 
-[3] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising Diffusion Probabilistic Models. 2020. arXiv:
-2006.11239 [cs.LG].
+[3] [Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising Diffusion Probabilistic Models. 2020. arXiv:
+2006.11239 [cs.LG].](https://arxiv.org/abs/2006.11239)
 
-[4] Xiang Lisa Li et al. Diffusion-LM Improves Controllable Text Generation. 2022. arXiv: 2205.14217
-[cs.CL].
+[4] [Xiang Lisa Li et al. Diffusion-LM Improves Controllable Text Generation. 2022. arXiv: 2205.14217
+[cs.CL].](https://arxiv.org/abs/2205.14217)
 
