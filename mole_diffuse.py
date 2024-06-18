@@ -28,7 +28,7 @@ if __name__ == "__main__":
     args_dict = arg_parse()
     config = OmegaConf.load(f'{args_dict["configs"]}.yaml')
     config = config.diffusion
-    data = QM9(root='.qm9_data', transform=None)
+    data = QM9(root='./qm9_data', transform=None)
 
     """
     each batch is considered a hugh graph with many nodes and edges,
@@ -73,6 +73,7 @@ if __name__ == "__main__":
         freeze_pretrain=config.freeze
         ).to(device)
     
+    '''load pretrain model parameters'''
     net.load_state_dict(
         torch.load(load_model_pth),
         strict = False

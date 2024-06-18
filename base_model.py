@@ -87,7 +87,6 @@ class NNEdgeAttr(nn.Module):
 
 # Encoder 
 class Net(nn.Module):
-    # def __init__(self, n_feat_in, hidden_dim, latent_dim, time_emb_dim,n_layers, activation= nn.SiLU(), edge_attr_dim = None):
     def __init__(
         self,
         n_feat_in,
@@ -225,7 +224,7 @@ class GNN(nn.Module):
         layers: list,
         latent_space_dims: list,
         time_emb_dim: int,
-        activation= nn.SiLU(),
+        activation = nn.SiLU(),
         edge_attr_dim: int = 0,
         fine_tune = False,
         freeze_pretrain = False
