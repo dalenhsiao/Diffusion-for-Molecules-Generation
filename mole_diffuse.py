@@ -73,10 +73,11 @@ if __name__ == "__main__":
         freeze_pretrain=config.freeze
         ).to(device)
     
-    # net.load_state_dict(
-    #     torch.load(load_model_pth),
-    #     strict = False
-    #     )
+    '''load pretrain model parameters'''
+    net.load_state_dict(
+        torch.load(load_model_pth),
+        strict = False
+        )
     # diffusion model
     diffusion = DiffusionModel(
         net,
