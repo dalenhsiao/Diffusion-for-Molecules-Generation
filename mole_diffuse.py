@@ -108,7 +108,6 @@ if __name__ == "__main__":
                 ts = torch.randint(0, timestep, (data.x.shape[0],), device=device).long()
                 h_noisy, noise = diffusion.sample_forward_diffuse_training(h, ts, device=device)
                 pred_noise, h_0 = diffusion.model_prediction(h_noisy, ts, data.edge_index)
-                import pdb ; pdb.set_trace()
                 loss = criterion(pred_noise, noise)
                 loss.backward()
                 optimizer.step()
